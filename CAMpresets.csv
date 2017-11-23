@@ -1,0 +1,75 @@
+name,test_bench
+exposure time,100000
+auto exposure,off
+gain,18
+auto gain,off
+gamma,1
+gamma enable,off
+black level,-0.8
+pixel format,mono16
+width,1280
+height,1024
+offsetx,50
+offsety,50
+decimate,FALSE
+trigger mode,off
+trigger source,line0
+trigger activation,risingedge
+trigger timout,15000
+,
+name,BEC1
+exposure time,486
+auto exposure,off
+gain,10
+auto gain,off
+gamma,1
+gamma enable,off
+black level,1.4
+pixel format,mono16
+width,1280
+height,964
+offsetx,50
+offsety,50
+decimate,FALSE
+trigger mode,on
+trigger source,line0
+trigger activation,risingedge
+trigger timout,20000
+,
+name,BEC2
+exposure time,486
+auto exposure,off
+gain,10
+auto gain,off
+gamma,1
+gamma enable,off
+black level,1.4
+pixel format,mono16
+width,648
+height,488
+offsetx,50
+offsety,50
+decimate,FALSE
+trigger mode,on
+trigger source,line0
+trigger activation,risingedge
+trigger timout,20000
+,
+name,andrei
+exposure time,500
+auto exposure,off
+gain,10
+auto gain,off
+gamma,1
+gamma enable,off
+black level,1.4
+pixel format,mono16
+width,1288
+height,964
+offsetx,50
+offsety,50
+decimate,FALSE
+trigger mode,on
+trigger source,line0
+trigger activation,risingedge
+trigger timout,20000
