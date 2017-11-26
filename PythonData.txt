@@ -1,0 +1,30 @@
+FileNumber=10
+# Current Variables
+# 
+currentTop=1.2
+currentBottom=7.000000E+0
+currentNorth=1.000000E+0
+currentSouth=4
+setFreq=1.042500E+2
+# Master Staging List
+# Line	Marker	Option	Halt	0       4       8      12      16      20    AO	Delay		Points	0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 Comment
+00		Ramp	1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	1	0	0	0	0	0	currentNorth	currentSouth	currentTop	currentBottom	step 1
+01		Ramp	0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	1	0	0	0	0	0	currentNorth	currentSouth	currentTop	currentBottom	step 1
+02		Ramp	1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	1	0	0	0	0	0	currentNorth	currentSouth	currentTop	currentBottom	step 1
+03		Ramp	0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	0.5	0	0	0	0	0	currentNorth	currentSouth	currentTop	currentBottom	step2
+04		Ramp	0 1 2 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	0.5	0	0	0	0	0	currentNorth	currentSouth	currentTop	currentBottom	step2
+05		Ramp	0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	0.5	0	0	0	0	0	currentNorth	currentSouth	currentTop	currentBottom	step2
+06		Ra mp	0 1 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	0.5	0	0	0	0	0	currentNorth	currentSouth	currentTop	currentBottom	step2
+#
+# Evaporation
+
+
+
+# Line	Marker	Option	Halt	0       4       8      12      16      20    AO	Delay		PointsFreq0 Amp0 Phase0 Freq1 Amp1 Phase1		Freq2 Amp2 Phase2 Freq3 Amp3 Phase3 
+00		Ramp	1 0 0 0 0 0 0 2 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	1	0	0	-40	0	0	-40	0	0	-40	0	setFreq	0	0	step 1
+01		Ramp	1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	1	0	0	-40	0	0	-40	0	0	-40	0	1.032500E+2	0	0	step 1
+02		Ramp	1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	1	0	0	-40	0	0	-40	0	0	-40	0	1.032500E+2	0	0	step 1
+03		Ramp	0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	0.5	0	0	-40	0	0	-40	0	0	-40	0	1.032500E+2	0	0	step2
+04		Ramp	0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	0.5	0	0	-40	0	0	-40	0	0	-40	0	1.032500E+2	0	0	step2
+05		Ramp	0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	0.5	0	0	-40	0	0	-40	0	0	-40	0	1.032500E+2	0	0	step2
+06		Ramp	0 1 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	0.5	0	0	-40	0	0	-40	0	0	-40	0	1.032500E+2	0	0	step2

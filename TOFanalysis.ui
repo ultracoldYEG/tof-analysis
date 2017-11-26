@@ -42,7 +42,7 @@
        <enum>QTabWidget::Rounded</enum>
       </property>
       <property name="currentIndex">
-       <number>1</number>
+       <number>0</number>
       </property>
       <widget class="QWidget" name="AcquireImageTab">
        <attribute name="title">
@@ -1178,7 +1178,7 @@ Activation</string>
              <double>0.100000000000000</double>
             </property>
             <property name="maximum">
-             <double>7.000000000000000</double>
+             <double>60.000000000000000</double>
             </property>
             <property name="value">
              <double>2.000000000000000</double>
@@ -1224,31 +1224,18 @@ Activation</string>
         <property name="title">
          <string>Capture</string>
         </property>
-        <widget class="QWidget" name="capture_plot" native="true">
-         <property name="enabled">
-          <bool>true</bool>
-         </property>
+        <widget class="QLabel" name="img_label">
          <property name="geometry">
           <rect>
-           <x>0</x>
-           <y>8</y>
-           <width>549</width>
-           <height>431</height>
+           <x>10</x>
+           <y>20</y>
+           <width>531</width>
+           <height>411</height>
           </rect>
          </property>
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
+         <property name="text">
+          <string/>
          </property>
-         <property name="minimumSize">
-          <size>
-           <width>400</width>
-           <height>300</height>
-          </size>
-         </property>
-         <layout class="QVBoxLayout" name="plotLayout_2"/>
         </widget>
        </widget>
       </widget>

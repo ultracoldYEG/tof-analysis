@@ -4,13 +4,6 @@ Created on Tue Jan 19 10:09:26 2016
 
 @author: Lindsay
 """
-# from PyQt4.uic import loadUiType
-# from matplotlib.backends.backend_qt4agg import (
-#     FigureCanvasQTAgg as FigureCanvas,
-#     NavigationToolbar2QT as NavigationToolbar)
-# from PyQt4 import QtGui, QtCore
-
-
 from PyQt5.uic import loadUiType
 from matplotlib.backends.backend_qt5agg import (
     FigureCanvasQTAgg as FigureCanvas,
@@ -22,7 +15,7 @@ from PyQt5.QtGui import *
 
 import matplotlib.pyplot as plt    
 import matplotlib.gridspec as gridspec
-# from lmfit import Model
+from lmfit import Model
 import sys
 import os
 import numpy as np
@@ -31,9 +24,8 @@ import time
 from datetime import date
 # import mv
 import mock_mv as mv
-import threading
-import Queue
-import struct
+import bmp_loader
+import capture_threads
 
 ROOT_PATH = os.getcwd()
 
@@ -68,28 +60,43 @@ class CamWindow(QCamSelect, Ui_CamSelect):
     def __init__(self):
         super(CamWindow, self).__init__()
         self.setupUi(self)
-        
-        self.cameraCombo.addItems(['Top Cam', 'Side Cam', 'Andrei'])
-        self.cameraSerialNums = ['14234117','14366837','15384643']
+        self.device_id = None
+        self.devices = {
+            'Top Cam': '14234117',
+            'Side Cam': '14366837',
+            'Andrei': '15384643',
+        }
+
+        self.cameraCombo.addItems(self.devices.keys())
         self.openButton.clicked.connect(self.opened)
         self.cancelButton.clicked.connect(self.cancelled)
         
     def opened(self):
-        global device_id
-        device_id = self.cameraSerialNums[self.cameraCombo.currentIndex()]
-        QtCore.QCoreApplication.instance().quit()
+        self.device_id = self.devices.get(self.cameraCombo.currentText())
+        self.done(0)
         
     def cancelled(self):
         sys.exit()
 
    
 class Main(QMainWindow, Ui_MainWindow):
-    def __init__(self, device, q):
+    def __init__(self, device,):
         super(Main, self).__init__()
         self.setupUi(self)
         self.dev = device
-        self.q = q
-        
+
+        self.snapshot_thread = capture_threads.AbsorptionCapture(self.dev)
+        self.continuous_capture_thread = capture_threads.ContinuousCapture(self.dev, min_delay=0)
+        self.delayed_capture_thread = capture_threads.DelayedCapture(self.dev, min_delay=0)
+        self.triggered_capture_thread = capture_threads.TriggeredCapture(self.dev)
+
+        self.snapshot_thread.finished.connect(self.set_images)
+        self.continuous_capture_thread.finished.connect(self.new_continuous_capture)
+        self.delayed_capture_thread.finished.connect(self.new_capture)
+        self.triggered_capture_thread.finished.connect(self.new_capture)
+
+        self.captures = []
+
         # Setup figures
         self.fig1 = plt.figure()
         
@@ -152,15 +159,6 @@ class Main(QMainWindow, Ui_MainWindow):
 
         self.dev.Setting.Base.Camera.GenICam.AcquisitionControl.TriggerMode = "Off"
         self.dev.Setting.Base.Camera.GenICam.ImageFormatControl.PixelFormat = "Mono16"
-        self.fig5 = plt.Figure()
-        self.a5=plt.Axes(self.fig5, [.01,.01,.99,.99])
-        self.fig5.add_axes(self.a5)
-        self.a5.imshow(self.dev.snapshot(),cmap=plt.cm.bone)
-        self.a5.axis("off")
-        self.canvas5 = FigureCanvas(self.fig5)
-        self.plotLayout_2.addWidget(self.canvas5)
-        self.canvas5.draw()
-        self.fig5.tight_layout
         
         self.fig6 = plt.Figure()
         self.fig6.set_facecolor((1,1,1))
@@ -200,23 +198,23 @@ class Main(QMainWindow, Ui_MainWindow):
         self.bkgdValue.setMaximum(100000)
          
         # setup combo box
-        self.FitTypeCombo.addItems(['Gaussian (full)','Gaussian (ROI)','Gaussian (ROI->slice)'])
-        self.atomCombo.addItems(['87 Rb','39 K','40 K'])
-        self.imageTypeCombo.addItems(['Absorption','Fluorescence'])        
-        self.whichImageCombo.addItems(['Image 1', 'Image 2', 'Image 3', 'Processed'])        
+        self.FitTypeCombo.addItems(['Gaussian (full)', 'Gaussian (ROI)', 'Gaussian (ROI->slice)'])
+        self.atomCombo.addItems(['87 Rb', '39 K', '40 K'])
+        self.imageTypeCombo.addItems(['Absorption', 'Fluorescence'])
+        self.whichImageCombo.addItems(['Image 1', 'Image 2', 'Image 3', 'Processed'])
         self.whichImageCombo.activated.connect(self.update_rawimage)
-        self.cmapCombo.addItems(['coolwarm','gray','spectral','coolwarm_r','gray_r','spectral_r'])
-        self.cmapRawCombo.addItems(['coolwarm','gray','spectral','coolwarm_r','gray_r','spectral_r'])
+        self.cmapCombo.addItems(['coolwarm', 'gray', 'spectral', 'coolwarm_r', 'gray_r', 'spectral_r'])
+        self.cmapRawCombo.addItems(['coolwarm', 'gray', 'spectral', 'coolwarm_r', 'gray_r', 'spectral_r'])
         self.cmapCombo.activated.connect(self.update_image)
         self.cmapRawCombo.activated.connect(self.update_rawimage)
 
-        self.user_auto_expose_6.addItems(['Off','Once','Continuous'])
-        self.user_auto_gain_6.addItems(['Off','Once','Continuous'])
-        self.user_gamma_enable.addItems(['Off','On'])
-        self.user_pixel_format_6.addItems(['Mono8','Mono16'])
-        self.user_trigger_mode.addItems(["Off","On"])
-        self.user_trigger_source.addItems(["Line0","Line2","Line3","Software"])
-        self.user_trigger_activation.addItems(["RisingEdge","FallingEdge","AnyEdge","LevelLow","LevelHigh"])
+        self.user_auto_expose_6.addItems(['Off', 'Once', 'Continuous'])
+        self.user_auto_gain_6.addItems(['Off', 'Once', 'Continuous'])
+        self.user_gamma_enable.addItems(['Off', 'On'])
+        self.user_pixel_format_6.addItems(['Mono8', 'Mono16'])
+        self.user_trigger_mode.addItems(["Off", "On"])
+        self.user_trigger_source.addItems(["Line0", "Line2", "Line3", "Software"])
+        self.user_trigger_activation.addItems(["RisingEdge", "FallingEdge", "AnyEdge", "LevelLow", "LevelHigh"])
         
         global presets_filepath
         presets_filepath = os.path.join(ROOT_PATH, 'CAMpresets.csv')
@@ -261,9 +259,12 @@ class Main(QMainWindow, Ui_MainWindow):
         self.defaultROI()
                    
         # Set for testing
-        self.OutputFile.setText('Z:/Data/ImageData/bmp_test/AllData.txt')
-        self.ControlFile.setText("Z:/PythonData")
-        self.NumDataFolder.setText('Z:/Data/ImageData/')
+        # self.OutputFile.setText('Z:/Data/ImageData/bmp_test/AllData.txt')
+        # self.ControlFile.setText("Z:/PythonData")
+        # self.NumDataFolder.setText('Z:/Data/ImageData/')
+        self.OutputFile.setText(os.path.join(ROOT_PATH, 'AllData.txt'))
+        self.ControlFile.setText(os.path.join(ROOT_PATH, 'PythonData.txt'))
+        self.NumDataFolder.setText(os.path.join(ROOT_PATH, 'ImageData'))
 
         # set original data arrays to zero
         self.xvals=[]
@@ -285,37 +286,8 @@ class Main(QMainWindow, Ui_MainWindow):
         self.Vfit_sigy.setText(str(1.0))
         self.Vfit_z0.setText(str(1.0))
 
-        # timer for auto update
-        self.timer = QtCore.QTimer()
-        self.timer.setInterval(3000) 
-        self.timer.timeout.connect(self.auto_update_button_func)
-        
-        #timer for continuous capture mode
-        self.timer2 = QtCore.QTimer() 
-        self.timer2.setInterval(100)
-        self.timer2.timeout.connect(self.continuous_capture)
-    
-    # Begin functions         
-         
-    
-    def disable_continuous_modes(self):
-        global enable_snapshot_thread
-        orig_enable_snapshot_thread = enable_snapshot_thread
-        orig_cont_capture = self.continuous_capture_cb.isChecked()
-        
-        enable_snapshot_thread = False
-        self.continuous_capture_cb.setChecked(False)
-        self.update_continuous_capture()
-        
-        time.sleep(0.2)
-        
-        return [orig_enable_snapshot_thread, orig_cont_capture]
-        
-    def reactivate_continuous_modes(self, orig_enable_snapshot_thread, orig_cont_capture):
-        global enable_snapshot_thread
-        enable_snapshot_thread = orig_enable_snapshot_thread
-        self.continuous_capture_cb.setChecked(orig_cont_capture)
-        self.update_continuous_capture()
+        self.update_param_disp()
+        self.update_trigger_disp()
     
     def update_param_disp(self):
         #this will update the "value" column of the image settings panel directly from the camera's control board
@@ -365,10 +337,10 @@ class Main(QMainWindow, Ui_MainWindow):
         self.trigger_source.setText(str(GenICam_handle.AcquisitionControl.TriggerSource))
         self.trigger_activation.setText(str(GenICam_handle.AcquisitionControl.TriggerActivation))
         self.trigger_timeout.setText(str(self.dev.Setting.Base.Camera.ImageRequestTimeout_ms.value))
-        
+
     def set_cam_params(self):
         #this will apply the imaging settings in the "set to" column to the camera
-        [orig_snap, orig_cont] = self.disable_continuous_modes()
+
         
         try:
             GenICam_handle = self.dev.Setting.Base.Camera.GenICam
@@ -410,13 +382,11 @@ class Main(QMainWindow, Ui_MainWindow):
             
         except Exception as e:
             print e
-            
-        self.reactivate_continuous_modes(orig_snap, orig_cont)
+
         self.update_param_disp()
             
     def set_trigger_params(self):
-        #this will apply the trigger settings in the "set to" column to the cameras 
-        [orig_snap, orig_cont] = self.disable_continuous_modes()
+        #this will apply the trigger settings in the "set to" column to the cameras
 
         try:
             GenICam_handle = self.dev.Setting.Base.Camera.GenICam
@@ -429,7 +399,6 @@ class Main(QMainWindow, Ui_MainWindow):
             print e
             
         self.update_trigger_disp()
-        self.reactivate_continuous_modes(orig_snap, orig_cont)
         
     def read_preset_file(self):
         #this function parses the preset csv file and finds the name that matches the value in the "preset" combo box.
@@ -490,132 +459,85 @@ class Main(QMainWindow, Ui_MainWindow):
         
     def redraw_cam_plot(self,image):
         #this will simply redraw the capture plot given an image
-        self.a5.cla()
-        self.a5.imshow(image,cmap = plt.cm.bone, interpolation = 'none')
-        self.a5.axis("off")
-        self.canvas5.draw()
-        self.capture_groupbox.setTitle(str(np.shape(image)[1])+" x "+str(np.shape(image)[0]))
+        image = np.require(image, np.uint8, 'C')
+        img = QImage(image.data, image.shape[1], image.shape[0], image.strides[0], QImage.Format_Indexed8)
+        pix_map = QPixmap.fromImage(img)
+        self.img_label.setPixmap(pix_map.scaled(500, 400, QtCore.Qt.KeepAspectRatio))
+
+    def new_capture(self, image):
+        self.captures.append(image)
+        if len(self.captures) >= self.capture_num.value():
+            self.redraw_cam_plot(self.captures[0])
+            self.update_param_disp()
+            self.update_trigger_disp()
+            self.capture_num_info.setText('1/' + str(self.capture_num.value()))
+            return
+        self.start_single_capture_thread()
+
+    def new_continuous_capture(self, image):
+        down_sample_factor = self.user_down_sample.value()
+        self.continuous_capture_thread.min_delay = 1.0 / self.user_max_fps.value()
+        self.redraw_cam_plot(image[::down_sample_factor, ::down_sample_factor])
 
     def capture_new_image(self):
         #this will capture a specified number of images with or without a trigger
-        global captures
-        global enable_snapshot_thread
-        if self.continuous_capture_cb.isChecked() or enable_snapshot_thread:
+        if self.continuous_capture_cb.isChecked() or self.snapshot_thread.running.state:
             print 'Cannot capture image while in continuous capture mode'
             return
-        captures = []
-        time_delay = self.min_time_delay.value()/1000.
-        init_time = time.time()
+        self.captures = []
+        self.start_single_capture_thread()
+
+    def start_single_capture_thread(self):
+        self.delayed_capture_thread.min_delay = self.min_time_delay.value()/1000.
         if str(self.dev.Setting.Base.Camera.GenICam.AcquisitionControl.TriggerMode) == 'On':
-            #this is if a trigger is enabled
-            for i in range(self.capture_num.value()):
-                last_snapshot = triggered_snapshot(self.dev,self.dev.Setting.Base.Camera.ImageRequestTimeout_ms.value)
-                if last_snapshot:
-                    captures.append(last_snapshot)
-                    print (time.time()-init_time)*1000.
-                    
-                else:
-                    print 'Failed to capture after '+str(i)+' images'
-                    break
+            self.triggered_capture_thread.start()
         else:
-            #without a trigger it will use the "min time between" to time the capturing of images
-            for i in range(self.capture_num.value()):
-                while time.time() - init_time < time_delay:
-                    continue
-                print (time.time()-init_time)*1000.
-                init_time= time.time()
-                captures.append(self.dev.snapshot())
-        self.redraw_cam_plot(captures[0])
-        self.update_param_disp()
-        self.update_trigger_disp()
-        self.capture_num_info.setText('1/'+str(self.capture_num.value()))
+            self.delayed_capture_thread.start()
         
     def increase_capture_scroll(self):
-        #used to scroll left or right if multiple images are collected by a multishot capture
-        global captures
+        #used to scroll left or right if multiple images are collected by a multishot
         if self.continuous_capture_cb.isChecked():
             print 'Cannot scroll while in continuous capture mode'
             return
-        current_index, current_capture_num = self.capture_num_info.text().split('/')
-        self.redraw_cam_plot(captures[int(current_index)%int(current_capture_num)])
-        self.capture_num_info.setText(str((int(current_index)%int(current_capture_num))+1)+'/'+str(current_capture_num))
+        current_index, current_capture_num = [int(x) for x in self.capture_num_info.text().split('/')]
+        self.redraw_cam_plot(self.captures[current_index % current_capture_num])
+        self.capture_num_info.setText(str((current_index % current_capture_num) + 1)+'/'+str(current_capture_num))
         
     def decrease_capture_scroll(self):
         #used to scroll left or right if multiple images are collected by a multishot capture
-        global captures
         if self.continuous_capture_cb.isChecked():
             print 'Cannot scroll while in continuous capture mode'
             return
-        current_index, current_capture_num = self.capture_num_info.text().split('/')
-        self.redraw_cam_plot(captures[(int(current_index)-2)%int(current_capture_num)])
-        self.capture_num_info.setText(str((int(current_index)-2)%int(current_capture_num)+1)+'/'+str(current_capture_num))
+        current_index, current_capture_num = [int(x) for x in self.capture_num_info.text().split('/')]
+        self.redraw_cam_plot(self.captures[(current_index-2) % current_capture_num])
+        self.capture_num_info.setText(str((current_index-2) % current_capture_num+1)+'/'+str(current_capture_num))
 
     def update_continuous_capture(self):
-        global enable_snapshot_thread
         if self.continuous_capture_cb.isChecked():
-            #self.dev.Setting.Base.Camera.GenICam.AcquisitionControl.TriggerMode = "Off"
-            if enable_snapshot_thread:
-                print 'Cannot enter continuous capture while already collecting images'
-                self.timer2.stop()
+            if self.snapshot_thread.running.state:
+                print 'Cannot capture image while in snapshot thread is running'
                 self.continuous_capture_cb.setCheckState(False)
                 return
-            self.timer2.start()
+            self.continuous_capture_thread.start()
         else:
-            self.timer2.stop()
-
-    def continuous_capture(self):
-        a=triggered_snapshot(self.dev,self.dev.Setting.Base.Camera.ImageRequestTimeout_ms.value)
-        down_sample_factor = self.user_down_sample.value()
-        max_fps = self.user_max_fps.value()
-        
-        self.timer2.setInterval(1000.0/max_fps)
-        self.redraw_cam_plot(a[::down_sample_factor,::down_sample_factor])
-        time.sleep(0.01)
+            self.continuous_capture_thread.stop()
         
     def update_auto_update(self):
-        global enable_snapshot_thread
+        self.snapshot_thread.start()
+
+    def set_images(self, images):
+        print 'updating images'
+        self.img1 = np.array(images[0])
+        self.img2 = np.array(images[1])
+        self.img3 = np.array(images[2])
+
         if self.AutoUpdateImage.isChecked():
-            enable_snapshot_thread = True
-            self.timer.start()
-        else:
-            self.timer.stop()
-            enable_snapshot_thread = False
-            
-    def grab_3_triggered_images(self):
-        img_list = []
-        status = False
+            self.start_snapshot_thread()
 
-        queue_lock.acquire()
-        if self.q.full():
-            for i in range(self.q.qsize()):
-                img_list.append(self.q.get())
-            queue_lock.release()
-            self.img1 = np.array(img_list[0])
-            self.img2 = np.array(img_list[1])
-            self.img3 = np.array(img_list[2])
-            status = True
-        else:
-            queue_lock.release()
-            print 'queue did not contain 3 images to get'
+        self.process_data()
 
-        return status
-
-    def single_image_load(self):
-        temp_imgs = []
-        for i in range(3):
-            image = triggered_snapshot(dev,dev.Setting.Base.Camera.ImageRequestTimeout_ms.value)
-            
-            if not image:
-                print 'failed to acquire an image'
-                return False
-                
-            else:    
-                temp_imgs.append(image)
-                
-        self.img1 = np.array(temp_imgs[0])
-        self.img2 = np.array(temp_imgs[1])
-        self.img3 = np.array(temp_imgs[2])
-        return True
+    def start_snapshot_thread(self):
+        self.snapshot_thread.start()
 
     def xyzvals(self,event):
      # function to call if the autoupdate is on, and the polling timeout is reached
@@ -656,7 +578,6 @@ class Main(QMainWindow, Ui_MainWindow):
         self.canvas4.draw()    
     # *********************************************************  
 
-    
     def update_fits(self):
         # a routine to gather data from various files and compile it nicely 
         self.update_slices()   
@@ -664,20 +585,12 @@ class Main(QMainWindow, Ui_MainWindow):
         self.update_yfit()
         self.calcAtoms()
     
-
-    
-    def update_data(self, isContinuous):
+    def update_data(self):
         # a routine to gather data from already-divided files and image files and compile it nicely 
     #        self.atoms = self.getAtomsData()
     #        r,c = np.shape(self.atoms)
     #        # check for nans, make these points zero
-    #        self.atoms = np.nan_to_num(self.atoms)      
-        if isContinuous:
-            if not self.grab_3_triggered_images(): #calling this function will try to update img1 img2 and img3
-                return False
-        else:
-            if not self.single_image_load():
-                return False
+    #        self.atoms = np.nan_to_num(self.atoms)
                 
         self.img1_float = self.img1.astype(float)
         self.img2_float = self.img2.astype(float)
@@ -702,11 +615,8 @@ class Main(QMainWindow, Ui_MainWindow):
             self.atoms = self.img1
             
         return True
-      
-     
-
     
-    def update_slices(self)      :  
+    def update_slices(self):
     # Perform analysis based on the choice between: (['Gaussian (full)','Gaussian (ROI)','Gaussian (ROI->slice)'])        
         if (str(self.FitTypeCombo.currentText()) == 'Gaussian (full)'): 
         
@@ -724,12 +634,7 @@ class Main(QMainWindow, Ui_MainWindow):
             y2 = int(self.ROIy2.value())
             r = y2 - y1 + 1
             c = x2 - x1 + 1
-            '''
-            self.xvals = np.sum(self.atoms[y1:y2+1,x1:x2+1],0)/r
-            self.xvals_haxis = np.arange(x1,x2,1)
-            self.yvals = np.sum(self.atoms[y1:y2+1,x1:x2+1],1)/c
-            self.yvals_haxis = np.arange(y1,y2,1)
-            '''
+
             self.xvals = np.sum(self.atoms[y1:y2,x1:x2],0)/r
             self.xvals_haxis = np.arange(x1,x2,1)
             self.yvals = np.sum(self.atoms[y1:y2,x1:x2],1)/c
@@ -741,17 +646,12 @@ class Main(QMainWindow, Ui_MainWindow):
                 width = int(self.sliceWidth.value()/2)
                 self.xvals = np.sum(self.atoms[int(centrey)-width:int(centrey)+width,x1:x2],0)/2/width
                 self.yvals = np.sum(self.atoms[y1:y2,int(centrex)-width:int(centrex)+width],1)/2/width
-               
-     
-             
-
     
     def getAtomsData(self):
     # get the values that we select to plot from various files, and create a data file with them        
         filename = self.ImageFile.text()
         atoms = np.loadtxt(filename,delimiter=',')
         return atoms
-    # *** end gegetAtomsDatatCtrl **************************************
         
     def initialize_fig_1(self):
         self.fig1.clf()
@@ -760,9 +660,6 @@ class Main(QMainWindow, Ui_MainWindow):
         self.fig1.add_axes(self.cax1)    
         self.fig1.add_axes(self.a2)
         self.fig1.add_axes(self.a3)
-        
-
-    
 
     def initialize_fig_4(self):
         self.fig4.clf()
@@ -770,7 +667,6 @@ class Main(QMainWindow, Ui_MainWindow):
         self.fig4.add_axes(self.a4)
         self.fig4.add_axes(self.cax4)
 
-    
     def update_image(self):
         # a routine to update the figure with new data
         # get plot settings before update
@@ -794,9 +690,6 @@ class Main(QMainWindow, Ui_MainWindow):
         self.a1.callbacks.connect('ylim_changed', self.ychange) 
         
         self.canvas1.draw()
-
-    
-
     
     def update_rawimage(self):
         # a routine to update the figure with new data
@@ -820,9 +713,7 @@ class Main(QMainWindow, Ui_MainWindow):
     
         self.a4.set_aspect(1)
         self.fig4.colorbar(cmesh,cax=self.cax4)
-        self.canvas4.draw()             
-    
-
+        self.canvas4.draw()
     
     def update_xplot(self):
         # a routine to update the figure with new data
@@ -833,16 +724,12 @@ class Main(QMainWindow, Ui_MainWindow):
         self.a2.set_xlim([self.ROIx1.value(),self.ROIx2.value()])
              
         fitx = np.linspace(self.xvals_haxis[0],self.xvals_haxis[-1])
-        fity = np.ones_like(fitx)
         fity = funcGaussian(fitx,float(self.Hfit_A.text()),float(self.Hfit_x0.text()),float(self.Hfit_sigx.text()),float(self.Hfit_z0.text()))
         self.lxslice = self.a2.axvline(x =  self.xcursor,color = 'black') # the horiz line
            
         self.a2.plot(fitx,fity,'k--',lw=1)  
         self.a2.hold(False)        
-                     
-    
 
-    
     def update_yplot(self):
         # a routine to update the figure with new data
         # get plot settings before update
@@ -852,16 +739,12 @@ class Main(QMainWindow, Ui_MainWindow):
         self.a3.set_xlim([self.ROIy1.value(),self.ROIy2.value()])
                  
         fitx = np.linspace(self.yvals_haxis[0],self.yvals_haxis[-1])
-        fity = np.ones_like(fitx)
         fity = funcGaussian(fitx,float(self.Vfit_A.text()),float(self.Vfit_y0.text()),float(self.Vfit_sigy.text()),float(self.Vfit_z0.text()))
         self.lyslice = self.a3.axvline(x =  self.ycursor,color = 'black') # the horiz line
            
         self.a3.plot(fitx,fity,'k--',lw=1)
         self.a3.hold(False)        
-             
-    
 
-    
     def update_xfit(self):
         xv = [float(i) for i in self.xvals_haxis]          
         yv = [float(i) for i in self.xvals]
@@ -910,9 +793,7 @@ class Main(QMainWindow, Ui_MainWindow):
         #self.update_xplot()
         
         self.fitdisplay.setPlainText(FitResults.fit_report())                        
-     
-                
-     
+
     def update_yfit(self):
         xv = [float(i) for i in self.yvals_haxis]          
         yv = [float(i) for i in self.yvals] 
@@ -960,18 +841,14 @@ class Main(QMainWindow, Ui_MainWindow):
         #self.update_yplot()
         
         self.fitdisplay.appendPlainText(FitResults.fit_report())                        
-     
 
-    
     def statAnalysis(self,xv,yv):
         # make some guesses for the fits
         centre = np.sum(np.power(yv,2)*xv)/np.sum(np.power(yv,2))
         var = np.sum(np.power(yv,2)*np.power(xv,2))/np.sum(np.power(yv,2))
         sig = np.sqrt(var-centre**2)
         A = np.max(yv)
-        return centre, sig, A     
-     
-       
+        return centre, sig, A
     
     def calcAtoms(self):
     # calculate some physical properties
@@ -981,8 +858,8 @@ class Main(QMainWindow, Ui_MainWindow):
         
         # scattering cross-section
         wavelength = self.lamda.value()*1e-9
-        det = self.detuning.value() * 10**6
-        gamma = 6e6; # MHz
+        det = self.detuning.value() * 1e6
+        gamma = 6e6 # MHz
         mass = 87*1.67e-27 # kg
         kB = 1.38e-23 # J/K
         scatt0 = 3*wavelength**2/2/np.pi
@@ -1002,13 +879,11 @@ class Main(QMainWindow, Ui_MainWindow):
         
         # subtract background from fit
         if self.subBkgd.isChecked():
-            self.atomSum = np.sum(self.picInROI) - self.bkgdAvg*self.picInROI.size
+            atomSum = np.sum(self.picInROI) - self.bkgdAvg*self.picInROI.size
         else:
-            self.atomSum = np.sum(self.picInROI)
-    #        bkgd = 0.5*(float(self.Vfit_z0.text()) + float(self.Hfit_z0.text())) # average
-    ##             
-    ##        self.atomNumSum = (self.pixSize.value()*1e-6)**2/scatt*(np.sum(np.sum(self.atoms))-bkgd*numpix)
-        self.atomNumSum = (self.pixSize.value()*1e-6)**2/scatt*(self.atomSum)
+            atomSum = np.sum(self.picInROI)
+
+        self.atomNumSum = (self.pixSize.value()*1e-6)**2/scatt*(atomSum)
 
         self.AtomNumSumLE.setText('{:.3e}'.format(self.atomNumSum))
         self.AtomNumFitLE.setText('{:.3e}'.format(self.atomNumFit))
@@ -1016,98 +891,61 @@ class Main(QMainWindow, Ui_MainWindow):
         self.TyLE.setText('{:.3f}'.format(self.Ty))
         self.TLE.setText('{:.3f}'.format(self.T))
         self.xwidthumLE.setText('{:.3f}'.format(self.widthxum))
-        self.ywidthumLE.setText('{:.3f}'.format(self.widthyum))     
-    # ***end statAnalysis **************************************
+        self.ywidthumLE.setText('{:.3f}'.format(self.widthyum))
 
     def load_image_button_func(self):
         if self.AutoUpdateImage.isChecked():
             print 'cannot load data while autoupdating'
             return
-        self.load_data(False)
-        
-    def auto_update_button_func(self):
-        self.load_data(True)
-       
-    
-    def load_data(self, isContinuous): 
-        
-        time1 = time.time()
-        QtGui.QApplication.processEvents()
-        if not self.update_data(isContinuous):
-            return 
-            
-        time2 = time.time()
+        self.start_snapshot_thread()
+
+    def process_data(self):
+        self.update_data()
+
         self.getCtrldata()
-        QtGui.QApplication.processEvents()
+        QApplication.processEvents()
         
-        time3 = time.time()
         self.update_slices()
-        QtGui.QApplication.processEvents()
-        
-        time4 = time.time()
+        QApplication.processEvents()
+
         self.update_xfit()
-        QtGui.QApplication.processEvents()
+        QApplication.processEvents()
         
-        time5 = time.time()
         self.update_yfit()
-        QtGui.QApplication.processEvents()
+        QApplication.processEvents()
         
         self.initialize_fig_1()
         self.initialize_fig_4()
-        
-        time6 = time.time()
+
         self.update_xplot()
-        QtGui.QApplication.processEvents()
+        QApplication.processEvents()
         
         self.update_yplot()
-        time7 = time.time()
         self.update_image()
-        QtGui.QApplication.processEvents()
-        
-        time8 = time.time()
+        QApplication.processEvents()
+
         self.update_rawimage()
-        QtGui.QApplication.processEvents()
-        
-        time9 = time.time()
+        QApplication.processEvents()
+
         self.calcAtoms()
-        QtGui.QApplication.processEvents()
-        
-        time10 = time.time()
+        QApplication.processEvents()
+
         self.writeDataFile()
-        QtGui.QApplication.processEvents()
-        
-        time11 = time.time()
-        '''
-        print ''
-        print 'xplot+yplot', str(time7 - time6) 
-        print 'image      ', str(time8 - time7) 
-        print 'raw image  ', str(time9 - time8) 
-        print 'total      ', time11 - time1
-        '''
-        #self.write_imgs_bmp(self.img1,"Z:/Data/ImageData/bmp_test/TOF_test.bmp")
-        
-    
+        QApplication.processEvents()
 
     
     def load_Ctrlpath(self): 
-        self.Ctrlpath = QtGui.QFileDialog.getOpenFileName(self,'Select Controls File (PythonData)')
+        self.Ctrlpath = QFileDialog.getOpenFileName(self,'Select Controls File (PythonData)')
         self.ControlFile.setText(self.Ctrlpath)
-    
 
-    
     def load_Outpath(self): 
-        self.Outpath = QtGui.QFileDialog.getOpenFileName(self,'Select Output File (Physical Data)')
+        self.Outpath = QFileDialog.getOpenFileName(self,'Select Output File (Physical Data)')
         self.OutputFile.setText(self.Outpath)
-    
 
-      
     def load_NumDataFolder(self): 
-        self.NumDataFolderName = QtGui.QFileDialog.getExistingDirectory(self,'Select Directory/Folder (For numbered Control and Physical Data)')
+        self.NumDataFolderName = QFileDialog.getExistingDirectory(self,'Select Directory/Folder (For numbered Control and Physical Data)')
         self.NumDataFolder.setText(self.NumDataFolderName)
-    
 
-             
-    # ***** end onclick ******************************* 
     def xchange(self,ax):
     # adjust ROI when using toolbar in image 1
        if self.ROIDirect.isChecked(): return # don't reset numbers in "direct entry" case
@@ -1117,9 +955,7 @@ class Main(QMainWindow, Ui_MainWindow):
        # update 1D figures
        self.a2.set_xlim([self.ROIx1.value(),self.ROIx2.value()])
        self.canvas1.draw()
-    # ***** end onclick ******************************* 
 
-    # ************************************ 
     def ychange(self,ax):
        # adjust ROI when using toolbar in image 1
         if self.ROIDirect.isChecked(): return # don't reset numbers in "direct entry" case
@@ -1129,9 +965,7 @@ class Main(QMainWindow, Ui_MainWindow):
         # update 1D figures
         self.a3.set_xlim([self.ROIy1.value(),self.ROIy2.value()])
         self.canvas1.draw()    
-    # ***** end ychange ******************************* 
 
-    # ************************************ 
     def update_ROI(self,):
     # adjust ROI when box values are changed
        # check that the "1" values are smaller than the "2" values
@@ -1154,9 +988,7 @@ class Main(QMainWindow, Ui_MainWindow):
        self.a2.set_xlim([self.ROIx1.value(),self.ROIx2.value()])
        self.a3.set_xlim([self.ROIy1.value(),self.ROIy2.value()])
        self.canvas1.draw()
-    # ***** end update_ROI ******************************* 
 
-    # ************************************ 
     def defaultROI(self):
     # initial ROI values
         GenICam_handle = self.dev.Setting.Base.Camera.GenICam
@@ -1168,11 +1000,7 @@ class Main(QMainWindow, Ui_MainWindow):
         self.ROIx2.setValue(right_bound)
         self.ROIy1.setValue(0)
         self.ROIy2.setValue(upper_bound)
-        
-        
-    # ***** end defaultROI ******************************* 
-               
-    # ************************************ 
+
     def update_bkgd(self):
     # get a value for the background so we can properly substract in pixel sum atom number counting 
         self.rawROIx1=int(self.a4.get_xlim()[0])
@@ -1193,11 +1021,7 @@ class Main(QMainWindow, Ui_MainWindow):
         self.picInROI  = np.nan_to_num(self.picInROI)
         self.bkgdAvg = np.sum(self.picInROI)/self.picInROI.size   
         self.bkgdValue.setValue(self.bkgdAvg)
-       
-    # ***** end defaultROI ******************************* 
 
-
-    # ************************************ 
     def writeDataFile(self):
     # create a text file that our data analysis program can read.
         if self.dataSaveCheck.isChecked():
@@ -1208,8 +1032,6 @@ class Main(QMainWindow, Ui_MainWindow):
             self.write_paramaters(file)
             
             file.close()
-            
-    # ***** end writeDataFile *******************************
 
     def write_paramaters(self,file_handle):
             file_handle.write('# Image Data\n')
@@ -1245,9 +1067,9 @@ class Main(QMainWindow, Ui_MainWindow):
         if not os.path.exists(folder):
             os.makedirs(folder)
         
-        self.write_imgs_bmp(self.img1,folder+"Image1.bmp")
-        self.write_imgs_bmp(self.img2,folder+"Image2.bmp")
-        self.write_imgs_bmp(self.img3,folder+"Image3.bmp")
+        bmp_loader.write_imgs_bmp(self.img1,folder+"Image1.bmp")
+        bmp_loader.write_imgs_bmp(self.img2,folder+"Image2.bmp")
+        bmp_loader.write_imgs_bmp(self.img3,folder+"Image3.bmp")
         
         control_filepath = folder + "AllData.txt"
         f = open(control_filepath, "w+")
@@ -1258,82 +1080,7 @@ class Main(QMainWindow, Ui_MainWindow):
         f.close()
         
         plt.savefig(folder+'Analysis_Window')
-    
-    def write_imgs_bmp(self,image,filepath):
-    
-        [im_height,im_width] = np.shape(image)
-        bpp = 8
-        if np.max(image) > 255:
-            bpp = 16
-            
-        write_buffer = bytearray(im_width*im_height*bpp/8 + 1500)
 
-        a=image
-        a = bytearray(a)
-        
-        struct.pack_into('<L',write_buffer, 0, int((np.binary_repr(ord('M'),width = 8)+np.binary_repr(ord('B'),width=8)),2))
-        struct.pack_into('<L',write_buffer, 2, im_width*im_height*bpp/8 + 1500) #size of the file
-        struct.pack_into('<L',write_buffer, 10, 70) #the byte where the image data begins
-        struct.pack_into('<L',write_buffer, 14, 40) #size of this header
-        struct.pack_into('<L',write_buffer, 18, im_width) #width
-        struct.pack_into('<L',write_buffer, 22, im_height) #height
-        struct.pack_into('<L',write_buffer, 26, 1) # number of colour planes
-        struct.pack_into('<L',write_buffer, 28, bpp) #bits per pixel
-        struct.pack_into('<L',write_buffer, 30, 0) #compression method
-        struct.pack_into('<L',write_buffer, 34, 0) #dummy image size
-        struct.pack_into('<L',write_buffer, 38, 3000) #horizontal pixels per meter
-        struct.pack_into('<L',write_buffer, 42, 3000) #vertical pixels per meter
-        struct.pack_into('<L',write_buffer, 46, 0) #dummy colour info
-        struct.pack_into('<L',write_buffer, 50, 0) #dummy colour info
-
-        if bpp == 8: #this is if the image is in Mono8 mode (8 bits per pixel)
-            for i in range(256):
-                bin_string = np.binary_repr(i,width = 8)
-                int_to_write = int('00000000'+bin_string+bin_string+bin_string,2)
-                struct.pack_into('<L',write_buffer, 54 + 4*i, int_to_write)
-
-            row_size = int(np.floor((8*im_width+31)/32.)*4)    
-            last_offset = 1074
-
-            for i in range(im_height)[::-1]:
-                current = row_size*i
-                for j in range(row_size/4):
-                    last_offset += 4
-                    write_buffer[last_offset] = a[current]     #first pixel
-                    write_buffer[last_offset+1] = a[current+1]     #next pixel
-                    write_buffer[last_offset+2] = a[current+2]     #third pixel
-                    write_buffer[last_offset+3] = a[current+3]     #last pixel in this byte
-                    current += 4
-                        
-        elif bpp == 16: #this is if the image is in Mono16 mode (16 bits per pixel)
-            struct.pack_into('<L',write_buffer, 30, 3) # change compression method to use colour maps
-
-            
-            struct.pack_into('>L',write_buffer, 54 + 0, int('0000FFFF',16)) #red bits - will contain nothing
-            struct.pack_into('>L',write_buffer, 54 + 4, int('FF000000',16)) #green bits - will contain MSB
-            struct.pack_into('>L',write_buffer, 54 + 8, int('00FF0000',16)) #blue bits - will contain LSB
-
-            last_offset = 54+12
-
-            #this saves the MSB digits into the green channel, and LSB into blue channel in little endian format (X,Blue,Green,Red)
-            #here the LSB is only 6 bits, leaving the 2 last bits as 0
-            for i in range(im_height)[::-1]:
-                current = 2*im_width * i
-                for j in range(im_width/2):
-                    last_offset += 4
-                    write_buffer[last_offset+1] = a[current+0]     #LSB to the blue channel
-                    write_buffer[last_offset+0] = a[current+1]     #MSB to the green channel
-                    #next pixel
-                    write_buffer[last_offset+3] = a[current+2]     #LSB to the blue channel
-                    write_buffer[last_offset+2] = a[current+3]     #MSB to the green channel
-                    current += 4
-                
-        g = open(filepath,'wb+')
-        g.write(write_buffer)
-
-        g.close()
-
-    
     def getCtrldata(self):
     # get the current control data so it matches the image
     #        filename =  "C:/Users/Ultracold/Google Drive/LindsayData/PythonData.txt"\
@@ -1349,98 +1096,23 @@ class Main(QMainWindow, Ui_MainWindow):
         self.fileNumLabel.setText("Filenum: %i"%(self.filenum))
         
         # get the file number
-        
-           
-    
 
-class snapshot_thread(threading.Thread):
-    def __init__(self,q):
-        threading.Thread.__init__(self)
-        self.q = q
-        self._stop = threading.Event()
-    def run(self,):
-        global dev
-        global enable_snapshot_thread
-        
-        while not self._stop.isSet():
-            if not enable_snapshot_thread:
-                time.sleep(0.2)
-                continue
-            
-            failed_to_acq = False    
-            temp_imgs = []    
-            
-            for i in range(3):
-                image = triggered_snapshot(dev,dev.Setting.Base.Camera.ImageRequestTimeout_ms.value)
-                
-                if not image:
-                    failed_to_acq = True
-                    print 'failed to acquire an image'
-                    time.sleep(1)
-                    break
-                    
-                else:    
-                    temp_imgs.append(image)
-                    
-            if not failed_to_acq:
-                queue_lock.acquire()
-                if self.q.qsize() > 0:
-                    for i in range(self.q.qsize()):
-                        a = self.q.get()
-                for i in temp_imgs:
-                    self.q.put(i)
-                queue_lock.release()
-                time.sleep(0.5)
-    def stop(self,):
-        self._stop.set()
-            
-class GUIThread(QtCore.QObject):
-    kill_signal = QtCore.pyqtSignal(threading.Thread)
-    
-    def __init__(self,q):
-        QtCore.QObject.__init__(self)
-        self.q = q
-        
-    def run(self,thread_to_kill):
-        global dev
-        app = QApplication(sys.argv)
-        main = Main(dev,self.q)
-        main.show()
-        main.update_param_disp()
-        main.update_trigger_disp()
-        app.exec_()
-        self.kill_signal.emit(thread_to_kill)
-
-@QtCore.pyqtSlot(threading.Thread)
-def kill_thread(thread):
-    thread.stop()
-    
-    
-    
 if __name__ == '__main__':
-    global device_id
-    global enable_snapshot_thread
-    
     app1 = QApplication(sys.argv)
-    main = CamWindow()
+
+    cam_selector = CamWindow()
+    cam_selector.show()
+    app1.exec_()
+
+
+    if cam_selector.device_id is None:
+        raise ValueError('No device found.')
+
+    dev = mv.dmg.get_device(cam_selector.device_id)
+
+    del cam_selector
+
+    main = Main(dev)
     main.show()
     app1.exec_()
-    
-    del main, app1
-    
-    enable_snapshot_thread = False
-    
-    dev = mv.dmg.get_device(device_id)
-    
-    image_queue = Queue.Queue(3)
-    queue_lock = threading.Lock()
-    
-    t1 = GUIThread(image_queue)
-    t2 = snapshot_thread(image_queue)
-    t1.kill_signal.connect(kill_thread)
-    t2.start()
-    t1.run(t2)
     sys.exit()
-    
-
-    
