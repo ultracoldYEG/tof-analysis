@@ -15,45 +15,25 @@ from PyQt5.QtGui import *
 
 import matplotlib.pyplot as plt    
 import matplotlib.gridspec as gridspec
-from lmfit import Model
 import sys
 import os
 import numpy as np
 from matplotlib.widgets import Cursor
-import time
 from datetime import date
 # import mv
 import mock_mv as mv
 import bmp_loader
 import capture_threads
+import atom_analyzer
 
 ROOT_PATH = os.getcwd()
 
 Ui_MainWindow, QMainWindow = loadUiType(os.path.join(ROOT_PATH, 'TOFanalysis.ui'))
-
 Ui_CamSelect, QCamSelect = loadUiType(os.path.join(ROOT_PATH, 'cam_selector.ui'))
 
-
- 
 def funcGaussian(x,A,x0,sigma,y0):
 # the independent variable must be sent first for the fit function
        return A*np.exp(-((x-x0)/sigma)**2/2)+y0
-
- 
-def triggered_snapshot(dev,timeout_value):
-    dev.image_request()
-    try:
-        result = dev.get_image(timeout=(float(timeout_value)/1000.))
-    except Exception as e:
-        print e
-        print "Did not recieve a trigger after "+str(timeout_value)+" milliseconds"
-        dev.image_request_reset(0)
-        return False
-    else:
-        print 'captured'
-        img = result.get_buffer()
-        del result
-        return img
         
  
 class CamWindow(QCamSelect, Ui_CamSelect):
@@ -85,10 +65,11 @@ class Main(QMainWindow, Ui_MainWindow):
         self.setupUi(self)
         self.dev = device
 
-        self.snapshot_thread = capture_threads.AbsorptionCapture(self.dev)
-        self.continuous_capture_thread = capture_threads.ContinuousCapture(self.dev, min_delay=0)
-        self.delayed_capture_thread = capture_threads.DelayedCapture(self.dev, min_delay=0)
-        self.triggered_capture_thread = capture_threads.TriggeredCapture(self.dev)
+        self.running = RunLock(False)
+        self.snapshot_thread = capture_threads.AbsorptionCapture(self.dev, self.running)
+        self.continuous_capture_thread = capture_threads.ContinuousCapture(self.dev, self.running, min_delay=0)
+        self.delayed_capture_thread = capture_threads.DelayedCapture(self.dev, self.running, min_delay=0)
+        self.triggered_capture_thread = capture_threads.TriggeredCapture(self.dev, self.running)
 
         self.snapshot_thread.finished.connect(self.set_images)
         self.continuous_capture_thread.finished.connect(self.new_continuous_capture)
@@ -96,6 +77,8 @@ class Main(QMainWindow, Ui_MainWindow):
         self.triggered_capture_thread.finished.connect(self.new_capture)
 
         self.captures = []
+
+        self.analyzer = atom_analyzer.Analyzer(self)
 
         # Setup figures
         self.fig1 = plt.figure()
@@ -176,7 +159,7 @@ class Main(QMainWindow, Ui_MainWindow):
         self.controlBrowse.clicked.connect(self.load_Ctrlpath)
         self.outputBrowse.clicked.connect(self.load_Outpath)
         self.NumDataBrowse.clicked.connect(self.load_NumDataFolder)
-        self.loadDataButton.clicked.connect(self.load_image_button_func)
+        self.loadDataButton.clicked.connect(self.start_snapshot_thread)
         self.updateFitButton.clicked.connect(self.update_fits)
         self.set_user_values.clicked.connect(self.set_cam_params)
         self.capture_button.clicked.connect(self.capture_new_image)
@@ -215,15 +198,13 @@ class Main(QMainWindow, Ui_MainWindow):
         self.user_trigger_mode.addItems(["Off", "On"])
         self.user_trigger_source.addItems(["Line0", "Line2", "Line3", "Software"])
         self.user_trigger_activation.addItems(["RisingEdge", "FallingEdge", "AnyEdge", "LevelLow", "LevelHigh"])
-        
-        global presets_filepath
-        presets_filepath = os.path.join(ROOT_PATH, 'CAMpresets.csv')
-        f = open(presets_filepath,'r')
-        preset_names = []
-        for line in f:
-            line=line.split(',')
-            if line[0] == 'name':
-                self.preset_combobox.addItems(line[1].rsplit())
+
+        self.presets_filepath = os.path.join(ROOT_PATH, 'CAMpresets.csv')
+        with open(self.presets_filepath,'r') as f:
+            for line in f:
+                line=line.split(',')
+                if line[0] == 'name':
+                    self.preset_combobox.addItems(line[1].rsplit())
         
         # setup spin boxes
         self.sliceWidth.setMinimum(2)
@@ -267,24 +248,11 @@ class Main(QMainWindow, Ui_MainWindow):
         self.NumDataFolder.setText(os.path.join(ROOT_PATH, 'ImageData'))
 
         # set original data arrays to zero
-        self.xvals=[]
-        self.yvals=[]      
-        self.xvals_haxis =[]
-        self.yvals_haxis =[]      
         self.atoms = []
         self.img1 = []
         self.img2 = []
         self.img3 = []
-        #       
-        # and fit parameters
-        self.Hfit_x0.setText(str(1.0))
-        self.Hfit_A.setText(str(1.0))
-        self.Hfit_sigx.setText(str(1.0))
-        self.Hfit_z0.setText(str(1.0))
-        self.Vfit_y0.setText(str(1.0))
-        self.Vfit_A.setText(str(1.0))
-        self.Vfit_sigy.setText(str(1.0))
-        self.Vfit_z0.setText(str(1.0))
+        #
 
         self.update_param_disp()
         self.update_trigger_disp()
@@ -402,28 +370,27 @@ class Main(QMainWindow, Ui_MainWindow):
         
     def read_preset_file(self):
         #this function parses the preset csv file and finds the name that matches the value in the "preset" combo box.
-        global presets_filepath
         
-        f = open(presets_filepath,'r')
-        preset_name = self.preset_combobox.currentText()
-        found_name = False
-        params = []
-        
-        for line in f:
-            line=line.split(',')
-            if found_name:
-                if line[0] == 'name':
-                    break
-                if line[1].rstrip():
-                    params.append(line[1].rstrip())
-                continue
-            
-            if line[1].rstrip() != preset_name:
-                continue
-            else:
-                found_name = True
-        f.close()
-        return params
+        with open(self.presets_filepath, 'r') as f:
+            preset_name = self.preset_combobox.currentText()
+            found_name = False
+            params = []
+
+            for line in f:
+                line=line.split(',')
+                if found_name:
+                    if line[0] == 'name':
+                        break
+                    if line[1].rstrip():
+                        params.append(line[1].rstrip())
+                    continue
+
+                if line[1].rstrip() != preset_name:
+                    continue
+                else:
+                    found_name = True
+            f.close()
+            return params
         
     def view_preset_params(self):
         #this function will place the preset values into the "set to" column without actually applying them to the camera
@@ -462,7 +429,7 @@ class Main(QMainWindow, Ui_MainWindow):
         image = np.require(image, np.uint8, 'C')
         img = QImage(image.data, image.shape[1], image.shape[0], image.strides[0], QImage.Format_Indexed8)
         pix_map = QPixmap.fromImage(img)
-        self.img_label.setPixmap(pix_map.scaled(500, 400, QtCore.Qt.KeepAspectRatio))
+        self.img_label.setPixmap(pix_map.scaled(self.img_label.width(), self.img_label.height(), QtCore.Qt.KeepAspectRatio))
 
     def new_capture(self, image):
         self.captures.append(image)
@@ -481,9 +448,7 @@ class Main(QMainWindow, Ui_MainWindow):
 
     def capture_new_image(self):
         #this will capture a specified number of images with or without a trigger
-        if self.continuous_capture_cb.isChecked() or self.snapshot_thread.running.state:
-            print 'Cannot capture image while in continuous capture mode'
-            return
+
         self.captures = []
         self.start_single_capture_thread()
 
@@ -496,8 +461,8 @@ class Main(QMainWindow, Ui_MainWindow):
         
     def increase_capture_scroll(self):
         #used to scroll left or right if multiple images are collected by a multishot
-        if self.continuous_capture_cb.isChecked():
-            print 'Cannot scroll while in continuous capture mode'
+        if self.running.state:
+            print 'Cannot scroll while capturing'
             return
         current_index, current_capture_num = [int(x) for x in self.capture_num_info.text().split('/')]
         self.redraw_cam_plot(self.captures[current_index % current_capture_num])
@@ -505,8 +470,8 @@ class Main(QMainWindow, Ui_MainWindow):
         
     def decrease_capture_scroll(self):
         #used to scroll left or right if multiple images are collected by a multishot capture
-        if self.continuous_capture_cb.isChecked():
-            print 'Cannot scroll while in continuous capture mode'
+        if self.running.state:
+            print 'Cannot scroll while capturing'
             return
         current_index, current_capture_num = [int(x) for x in self.capture_num_info.text().split('/')]
         self.redraw_cam_plot(self.captures[(current_index-2) % current_capture_num])
@@ -514,8 +479,8 @@ class Main(QMainWindow, Ui_MainWindow):
 
     def update_continuous_capture(self):
         if self.continuous_capture_cb.isChecked():
-            if self.snapshot_thread.running.state:
-                print 'Cannot capture image while in snapshot thread is running'
+            if self.running.state:
+                print 'Cannot capture image while another capture thread is running'
                 self.continuous_capture_cb.setCheckState(False)
                 return
             self.continuous_capture_thread.start()
@@ -530,6 +495,8 @@ class Main(QMainWindow, Ui_MainWindow):
         self.img1 = np.array(images[0])
         self.img2 = np.array(images[1])
         self.img3 = np.array(images[2])
+
+        self.analyzer.set_images(images)
 
         if self.AutoUpdateImage.isChecked():
             self.start_snapshot_thread()
@@ -552,8 +519,7 @@ class Main(QMainWindow, Ui_MainWindow):
         self.lxslice.set_xdata(event.xdata)       
         self.lyslice.set_xdata(event.ydata)
         self.canvas1.draw() 
-      
-    # *********************************************************
+
 
     def xyzvalsRaw(self,event):
      # function to call if the autoupdate is on, and the polling timeout is reached
@@ -573,79 +539,17 @@ class Main(QMainWindow, Ui_MainWindow):
 
         self.rawzCursorLE.setText('{:.3f}'.format(data[self.ycursorRaw,self.xcursorRaw]))
         
-        self.lxRaw.set_ydata(event.ydata)       
-        self.lyRaw.set_xdata(event.xdata)
-        self.canvas4.draw()    
-    # *********************************************************  
+        #self.lxRaw.set_ydata(event.ydata)
+        #self.lyRaw.set_xdata(event.xdata)
+        self.canvas4.draw()
 
     def update_fits(self):
-        # a routine to gather data from various files and compile it nicely 
-        self.update_slices()   
-        self.update_xfit()
-        self.update_yfit()
-        self.calcAtoms()
+        # a routine to gather data from various files and compile it nicely
+        self.analyzer.process_data()
     
-    def update_data(self):
-        # a routine to gather data from already-divided files and image files and compile it nicely 
-    #        self.atoms = self.getAtomsData()
-    #        r,c = np.shape(self.atoms)
-    #        # check for nans, make these points zero
-    #        self.atoms = np.nan_to_num(self.atoms)
-                
-        self.img1_float = self.img1.astype(float)
-        self.img2_float = self.img2.astype(float)
-        self.img3_float = self.img3.astype(float)
-        
-        # analyse images depending on type
-        if (self.imageTypeCombo.currentText() == 'Absorption'):
-            # analyze image using Beer's law. Check for divide by zero, ln(<0)
-            denom = (self.img2_float-self.img3_float)
-            denom[denom==0] = 1
-            
-            ratio = (self.img1_float-self.img3_float) / denom      
-            ratio[ratio<=0] = 0.01
-
-            self.atoms = -np.log(ratio)
-            
-        elif (self.imageTypeCombo.currentText() == 'Fluorescence'):    
-            # just subtract background.  Ignore Img3 if it exists
-            self.atoms = self.img1-self.img2
-            
-        else:
-            self.atoms = self.img1
-            
-        return True
-    
-    def update_slices(self):
-    # Perform analysis based on the choice between: (['Gaussian (full)','Gaussian (ROI)','Gaussian (ROI->slice)'])        
-        if (str(self.FitTypeCombo.currentText()) == 'Gaussian (full)'): 
-        
-            r,c = np.shape(self.atoms)
-            self.xvals = np.sum(self.atoms,0)/r
-            self.xvals_haxis = np.arange(0,c,1)
-            self.yvals = np.sum(self.atoms,1)/c
-            self.yvals_haxis = np.arange(0,r,1)
-    
-        else: 
-            # find the centre of each from statistics
-            x1 = int(self.ROIx1.value()) 
-            x2 = int(self.ROIx2.value())
-            y1 = int(self.ROIy1.value()) 
-            y2 = int(self.ROIy2.value())
-            r = y2 - y1 + 1
-            c = x2 - x1 + 1
-
-            self.xvals = np.sum(self.atoms[y1:y2,x1:x2],0)/r
-            self.xvals_haxis = np.arange(x1,x2,1)
-            self.yvals = np.sum(self.atoms[y1:y2,x1:x2],1)/c
-            self.yvals_haxis = np.arange(y1,y2,1)
-            
-            if (str(self.FitTypeCombo.currentText()) == 'Gaussian (ROI->slice)'): 
-                centrex,a,b = self.statAnalysis(self.xvals_haxis,self.xvals)
-                centrey,a,b = self.statAnalysis(self.yvals_haxis,self.yvals)
-                width = int(self.sliceWidth.value()/2)
-                self.xvals = np.sum(self.atoms[int(centrey)-width:int(centrey)+width,x1:x2],0)/2/width
-                self.yvals = np.sum(self.atoms[y1:y2,int(centrex)-width:int(centrex)+width],1)/2/width
+    def update_atoms(self):
+        self.analyzer.update_atoms()
+        self.atoms = self.analyzer.atoms
     
     def getAtomsData(self):
     # get the values that we select to plot from various files, and create a data file with them        
@@ -673,14 +577,20 @@ class Main(QMainWindow, Ui_MainWindow):
         cmesh = self.a1.imshow(self.atoms,cmap=str(self.cmapCombo.currentText()))
 
         if (self.CLimAuto.isChecked()):
-            cmesh.set_clim(vmin=np.min(np.min(self.atoms)),vmax = np.max(np.max(self.atoms)))
+            cmesh.set_clim(
+                vmin = np.min(self.atoms),
+                vmax = np.max(self.atoms)
+            )
         else:
-            cmesh.set_clim(vmin=self.CLimSpinMin.value(),vmax = self.CLimSpinMax.value())
+            cmesh.set_clim(
+                vmin = self.CLimSpinMin.value(),
+                vmax = self.CLimSpinMax.value()
+            )
         self.a1.set_xlim([self.ROIx1.value(),self.ROIx2.value()])
         self.a1.set_ylim([self.ROIy1.value(),self.ROIy2.value()])
 
-        self.lx = self.a1.axhline(y =  self.ycursor,color = 'black') # the horiz line
-        self.ly = self.a1.axvline(x =  self.xcursor,color = 'black')  # the horiz line
+        self.lx = self.a1.axhline(y =  self.ycursor, color = 'black') # the horiz line
+        self.ly = self.a1.axvline(x =  self.xcursor, color = 'black')  # the horiz line
          
         self.a1.set_aspect(1)
         self.fig1.colorbar(cmesh,cax=self.cax1)
@@ -708,8 +618,8 @@ class Main(QMainWindow, Ui_MainWindow):
             cmesh.set_clim(vmin=np.min(np.min(data)),vmax = np.max(np.max(data)))
         else:
              cmesh.set_clim(vmin=self.RawSpinMin.value(),vmax = self.RawSpinMax.value())
-        self.a4.set_xlim([self.xvals_haxis[0],self.xvals_haxis[-1]])
-        self.a4.set_ylim([self.yvals_haxis[0],self.yvals_haxis[-1]])
+        self.a4.set_xlim([self.analyzer.xvals_haxis[0],self.analyzer.xvals_haxis[-1]])
+        self.a4.set_ylim([self.analyzer.yvals_haxis[0],self.analyzer.yvals_haxis[-1]])
     
         self.a4.set_aspect(1)
         self.fig4.colorbar(cmesh,cax=self.cax4)
@@ -720,10 +630,10 @@ class Main(QMainWindow, Ui_MainWindow):
         # get plot settings before update
  
         self.a2.hold(True) 
-        self.a2.plot(self.xvals_haxis,self.xvals,'-',lw=1,color='deepskyblue')
+        self.a2.plot(self.analyzer.xvals_haxis,self.analyzer.xvals,'-',lw=1,color='deepskyblue')
         self.a2.set_xlim([self.ROIx1.value(),self.ROIx2.value()])
              
-        fitx = np.linspace(self.xvals_haxis[0],self.xvals_haxis[-1])
+        fitx = np.linspace(self.analyzer.xvals_haxis[0],self.analyzer.xvals_haxis[-1])
         fity = funcGaussian(fitx,float(self.Hfit_A.text()),float(self.Hfit_x0.text()),float(self.Hfit_sigx.text()),float(self.Hfit_z0.text()))
         self.lxslice = self.a2.axvline(x =  self.xcursor,color = 'black') # the horiz line
            
@@ -735,183 +645,20 @@ class Main(QMainWindow, Ui_MainWindow):
         # get plot settings before update
          
         self.a3.hold(True)        
-        self.a3.plot(self.yvals_haxis,self.yvals,'g-',lw=1)
+        self.a3.plot(self.analyzer.yvals_haxis,self.analyzer.yvals,'g-',lw=1)
         self.a3.set_xlim([self.ROIy1.value(),self.ROIy2.value()])
                  
-        fitx = np.linspace(self.yvals_haxis[0],self.yvals_haxis[-1])
+        fitx = np.linspace(self.analyzer.yvals_haxis[0],self.analyzer.yvals_haxis[-1])
         fity = funcGaussian(fitx,float(self.Vfit_A.text()),float(self.Vfit_y0.text()),float(self.Vfit_sigy.text()),float(self.Vfit_z0.text()))
         self.lyslice = self.a3.axvline(x =  self.ycursor,color = 'black') # the horiz line
            
         self.a3.plot(fitx,fity,'k--',lw=1)
-        self.a3.hold(False)        
-
-    def update_xfit(self):
-        xv = [float(i) for i in self.xvals_haxis]          
-        yv = [float(i) for i in self.xvals]
-    #if (str(self.FitTypeCompbo.currentText()) == 'Gaussian'): #x,A,x0,sigma,y0
-        gmod = Model(funcGaussian)
-        
-        # make some guesses for the fits
-        centre, sig, A= self.statAnalysis(xv,yv)
-        self.Hfit_x0.setText('{:.3f}'.format(centre))
-        self.Hfit_sigx.setText('{:.3f}'.format(sig))
-        self.Hfit_A.setText('{:.3f}'.format(A))
-       
-        params = gmod.make_params(A=float(self.Hfit_A.text()), x0=float(self.Hfit_x0.text()),sigma=float(self.Hfit_sigx.text()),y0=float(self.Hfit_z0.text()))
-        gmod.set_param_hint('A', value =float(self.Hfit_A.text()), max = 10000, min = 0.001)
-        gmod.set_param_hint('x0',value =float(self.Hfit_x0.text()), min = 100, max = 900)
-        gmod.set_param_hint('sigma',value =float(self.Hfit_sigx.text()), min = 1, max = 1000)
-        gmod.set_param_hint('y0', value =float(self.Hfit_z0.text()), min = -1000, max = 1000)
-        
-        if self.Hfit_A_ck.isChecked(): 
-            params['A'].vary = False
-        else:
-            params['A'].vary = True
-        
-        if self.Hfit_x0_ck.isChecked():
-            params['x0'].vary = False
-        else:  
-            params['x0'].vary = True
-           
-        if self.Hfit_sigx_ck.isChecked(): 
-            params['sigma'].vary = False
-        else:
-            params['sigma'].vary = True
-        
-        if self.Hfit_z0_ck.isChecked():
-            params['y0'].vary = False
-        else:  
-            params['y0'].vary = True
-               
-        FitResults = gmod.fit(yv,x=xv,params=params)
-        
-        self.Hfit_A.setText('{:.3f}'.format(FitResults.best_values.get('A')))
-        self.Hfit_x0.setText('{:.3f}'.format(FitResults.best_values.get('x0')))
-        self.Hfit_sigx.setText('{:.3f}'.format(FitResults.best_values.get('sigma')))
-        self.Hfit_z0.setText('{:.3f}'.format(FitResults.best_values.get('y0')))     
-        
-        #self.update_xplot()
-        
-        self.fitdisplay.setPlainText(FitResults.fit_report())                        
-
-    def update_yfit(self):
-        xv = [float(i) for i in self.yvals_haxis]          
-        yv = [float(i) for i in self.yvals] 
-        
-    #if (str(self.FitTypeCompbo.currentText()) == 'Gaussian'): #x,A,x0,sigma,y0
-        gmod = Model(funcGaussian)
-       
-        centre, sig, A = self.statAnalysis(xv,yv)
-        self.Vfit_y0.setText('{:.3f}'.format(centre))
-        self.Vfit_sigy.setText('{:.3f}'.format(sig))
-        self.Vfit_A.setText('{:.3f}'.format(A))
-        
-        params = gmod.make_params(A=float(self.Vfit_A.text()), x0=float(self.Vfit_y0.text()),sigma=float(self.Vfit_sigy.text()),y0=float(self.Vfit_z0.text()))
-        gmod.set_param_hint('A', value =float(self.Vfit_A.text()), max = 10000, min = 0.001)
-        gmod.set_param_hint('x0',value =float(self.Vfit_y0.text()), min = 100, max = 900)
-        gmod.set_param_hint('sigma',value =float(self.Vfit_sigy.text()), min = 1, max = 1000)
-        gmod.set_param_hint('y0', value =float(self.Vfit_z0.text()), min = -1000, max = 1000)
-      
-        if self.Vfit_A_ck.isChecked(): 
-            params['A'].vary = False
-        else:
-            params['A'].vary = True
-        
-        if self.Vfit_y0_ck.isChecked():
-            params['x0'].vary = False
-        else:  
-            params['x0'].vary = True
-           
-        if self.Vfit_sigy_ck.isChecked(): 
-            params['sigma'].vary = False
-        else:
-            params['sigma'].vary = True
-        
-        if self.Vfit_z0_ck.isChecked():
-            params['y0'].vary = False
-        else:  
-            params['y0'].vary = True
-      
-        FitResults = gmod.fit(yv,x=xv,params=params)
-        self.Vfit_A.setText('{:.3f}'.format(FitResults.best_values.get('A')))
-        self.Vfit_y0.setText('{:.3f}'.format(FitResults.best_values.get('x0')))
-        self.Vfit_sigy.setText('{:.3f}'.format(FitResults.best_values.get('sigma')))
-        self.Vfit_z0.setText('{:.3f}'.format(FitResults.best_values.get('y0')))     
-           
-        #self.update_yplot()
-        
-        self.fitdisplay.appendPlainText(FitResults.fit_report())                        
-
-    def statAnalysis(self,xv,yv):
-        # make some guesses for the fits
-        centre = np.sum(np.power(yv,2)*xv)/np.sum(np.power(yv,2))
-        var = np.sum(np.power(yv,2)*np.power(xv,2))/np.sum(np.power(yv,2))
-        sig = np.sqrt(var-centre**2)
-        A = np.max(yv)
-        return centre, sig, A
-    
-    def calcAtoms(self):
-    # calculate some physical properties
-        self.widthxum = self.pixSize.value()*float(self.Hfit_sigx.text())
-        self.widthyum = self.pixSize.value()*float(self.Vfit_sigy.text())
-        self.ODmax = np.sqrt(float(self.Vfit_A.text())*float(self.Hfit_A.text())) #geometric average
-        
-        # scattering cross-section
-        wavelength = self.lamda.value()*1e-9
-        det = self.detuning.value() * 1e6
-        gamma = 6e6 # MHz
-        mass = 87*1.67e-27 # kg
-        kB = 1.38e-23 # J/K
-        scatt0 = 3*wavelength**2/2/np.pi
-        scatt = scatt0/(1+(2*det/gamma)**2)        
-        self.atomNumFit = 2*np.pi*self.ODmax*self.widthxum*self.widthyum*1e-12/scatt
-        self.Tx = self.widthxum*self.widthxum*mass/kB/(self.TOF.value()**2)
-        self.Ty = self.widthyum*self.widthyum*mass/kB/(self.TOF.value()**2)
-        self.T  = self.widthxum*self.widthyum*mass/kB/(self.TOF.value()**2)
-      
-        # pixel sum atom number  
-        # only count inside the ROI
-        imgROIx1=int(self.a1.get_xlim()[0])
-        imgROIx2=int(self.a1.get_xlim()[1])
-        imgROIy1=int(self.a1.get_ylim()[0])
-        imgROIy2=int(self.a1.get_ylim()[1])
-        self.picInROI = self.atoms[imgROIx1:imgROIx2,imgROIy1:imgROIy2]
-        
-        # subtract background from fit
-        if self.subBkgd.isChecked():
-            atomSum = np.sum(self.picInROI) - self.bkgdAvg*self.picInROI.size
-        else:
-            atomSum = np.sum(self.picInROI)
-
-        self.atomNumSum = (self.pixSize.value()*1e-6)**2/scatt*(atomSum)
-
-        self.AtomNumSumLE.setText('{:.3e}'.format(self.atomNumSum))
-        self.AtomNumFitLE.setText('{:.3e}'.format(self.atomNumFit))
-        self.TxLE.setText('{:.3f}'.format(self.Tx))
-        self.TyLE.setText('{:.3f}'.format(self.Ty))
-        self.TLE.setText('{:.3f}'.format(self.T))
-        self.xwidthumLE.setText('{:.3f}'.format(self.widthxum))
-        self.ywidthumLE.setText('{:.3f}'.format(self.widthyum))
-
-    def load_image_button_func(self):
-        if self.AutoUpdateImage.isChecked():
-            print 'cannot load data while autoupdating'
-            return
-        self.start_snapshot_thread()
+        self.a3.hold(False)
 
     def process_data(self):
-        self.update_data()
+        self.update_atoms()
 
         self.getCtrldata()
-        QApplication.processEvents()
-        
-        self.update_slices()
-        QApplication.processEvents()
-
-        self.update_xfit()
-        QApplication.processEvents()
-        
-        self.update_yfit()
         QApplication.processEvents()
         
         self.initialize_fig_1()
@@ -925,9 +672,6 @@ class Main(QMainWindow, Ui_MainWindow):
         QApplication.processEvents()
 
         self.update_rawimage()
-        QApplication.processEvents()
-
-        self.calcAtoms()
         QApplication.processEvents()
 
         self.writeDataFile()
@@ -968,26 +712,28 @@ class Main(QMainWindow, Ui_MainWindow):
 
     def update_ROI(self,):
     # adjust ROI when box values are changed
-       # check that the "1" values are smaller than the "2" values
-       if self.ROICanvas.isChecked(): return # don't reset numbers in "direct entry" case
-       
-       if (self.ROIx1.value() > self.ROIx2.value()):
+        # check that the "1" values are smaller than the "2" values
+        if self.ROICanvas.isChecked():
+            return # don't reset numbers in "direct entry" case
+
+        if (self.ROIx1.value() > self.ROIx2.value()):
             temp = self.ROIx1.value()
             self.ROIx1.setValue(self.ROIx2.value())
             self.ROIx2.setValue(temp)
-       if (self.ROIy1.value() > self.ROIy2.value()):
+
+        if (self.ROIy1.value() > self.ROIy2.value()):
             temp = self.ROIy1.value()
             self.ROIy1.setValue(self.ROIy2.value())
             self.ROIy2.setValue(temp)
-      
-       # update main figure
-       self.a1.set_xlim([self.ROIx1.value(),self.ROIx2.value()])
-       self.a1.set_ylim([self.ROIy1.value(),self.ROIy2.value()])
-      
-       # update 1D figures
-       self.a2.set_xlim([self.ROIx1.value(),self.ROIx2.value()])
-       self.a3.set_xlim([self.ROIy1.value(),self.ROIy2.value()])
-       self.canvas1.draw()
+
+        # update main figure
+        self.a1.set_xlim([self.ROIx1.value(),self.ROIx2.value()])
+        self.a1.set_ylim([self.ROIy1.value(),self.ROIy2.value()])
+
+        # update 1D figures
+        self.a2.set_xlim([self.ROIx1.value(),self.ROIx2.value()])
+        self.a3.set_xlim([self.ROIy1.value(),self.ROIy2.value()])
+        self.canvas1.draw()
 
     def defaultROI(self):
     # initial ROI values
@@ -1094,8 +840,18 @@ class Main(QMainWindow, Ui_MainWindow):
         self.filenum = int(temp[0])
         fp.close()
         self.fileNumLabel.setText("Filenum: %i"%(self.filenum))
-        
-        # get the file number
+
+
+class RunLock(object):
+    def __init__(self, state):
+        self.state = state
+
+    def __enter__(self):
+        self.state = True
+
+    def __exit__(self, *args):
+        self.state = False
+
 
 if __name__ == '__main__':
     app1 = QApplication(sys.argv)
@@ -1103,7 +859,6 @@ if __name__ == '__main__':
     cam_selector = CamWindow()
     cam_selector.show()
     app1.exec_()
-
 
     if cam_selector.device_id is None:
         raise ValueError('No device found.')

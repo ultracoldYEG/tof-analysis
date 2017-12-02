@@ -30,18 +30,18 @@ setFreq=1.042500E+2
 06		Ramp	0 1 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	0.5	0	0	-40	0	0	-40	0	0	-40	0	1.032500E+2	0	0	step2
 
 # Image Data
-Atom num (sum) = 1.152e+07
-Atom Num (fit) = 1.159e+07
-Temp-x (uK) = 0.026
-Temp-y (uK) = 2065.770
-Temp (uK) = 7.323
-x-width (um) = 7.851
-y-width (um) = 2214.790
-xfit_x0 = 365.053
-xfit_A = 0.433
-xfit_sigx = 1.061
-xfit_z0 = 1.529
-yfit_y0 = -1347.496
-yfit_A = 2195.113
-yfit_sigy = 299.296
-yfit_z0 = 1.505
+Atom num (sum) = 1.801e+07
+Atom Num (fit) = 2.678e+03
+Temp-x (uK) = 184.632
+Temp-y (uK) = 0.023
+Temp (uK) = 2.063
+x-width (um) = 662.133
+y-width (um) = 7.400
+xfit_x0 = 1.000
+xfit_A = 0.017
+xfit_sigx = 89.477
+xfit_z0 = 0.952
+yfit_y0 = 168.171
+yfit_A = 0.037
+yfit_sigy = 1.000
+yfit_z0 = 0.955

@@ -46,6 +46,10 @@ Created on Tue Jan 19 10:09:26 2016
 import numpy as np
 import time
 
+
+def guass2D(x,y, A):
+    return A* 250. * np.exp(-(x-100.)**2 / 1000. - (y-250.)**2 / 1000.)
+
 class setting(object):
     def __init__(self, value):
         self.value = value
@@ -111,7 +115,12 @@ class Device(object):
 
     def snapshot(self):
         image_control = self.Setting.Base.Camera.GenICam.ImageFormatControl
-        return 255* np.random.rand(image_control.Height.value, image_control.Width.value)
+        snap = 255* np.random.rand(image_control.Height.value, image_control.Width.value)
+        # rand = np.random.rand()
+        # for i, val_i in enumerate(snap):
+        #     for j, val_j in enumerate(val_i):
+        #         snap[i,j] = int(255.0 - guass2D(float(i),float(j), 0.9) + np.random.rand())
+        return snap
 
     def image_request(self):
         time.sleep(1)
