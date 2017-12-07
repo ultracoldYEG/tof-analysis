@@ -12,7 +12,7 @@ import numpy as np
 ROOT_PATH = os.getcwd()
 
 
-gamma = 6.e6  # MHz
+gamma = 6.0e6  # MHz
 rb_mass = 87. * 1.67e-27  # kg
 kB = 1.38e-23  # J/K
  
@@ -26,10 +26,6 @@ class Analyzer(object):
     def __init__(self, main):
         self.main = main
 
-        self.image_type = 'Absorption'
-        self.fit_type = 'Gaussian (full)'
-        self.slice_width = 2
-
         self.xvals=[]
         self.yvals=[]      
         self.xvals_haxis =[]
@@ -41,9 +37,14 @@ class Analyzer(object):
         self.img2 = np.array([])
         self.img3 = np.array([])
 
-        self.atom_stats = AtomStats(self.main, self)
+        self.atom_params = AtomParameters(self.main, self)
 
         # and fit parameters
+
+        self.main.sliceWidth.setMinimum(2)
+        self.main.sliceWidth.setMaximum(500)
+        self.main.sliceWidth.setValue(20)
+        
         self.main.Hfit_x0.setText(str(1.0))
         self.main.Hfit_A.setText(str(1.0))
         self.main.Hfit_sigx.setText(str(1.0))
@@ -66,6 +67,11 @@ class Analyzer(object):
         self.y_model.set_param_hint('sigma', min=1, max=1000)
         self.y_model.set_param_hint('y0', min=-100, max=100)
 
+
+        self.main.imageTypeCombo.addItems(['Absorption', 'Fluorescence'])
+        self.main.FitTypeCombo.addItems(['Gaussian (full)', 'Gaussian (ROI)', 'Gaussian (ROI->slice)'])
+        self.main.atomCombo.addItems(['87 Rb', '39 K', '40 K'])
+
     @property
     def ROIx1(self):
         return self.main.ROIx1.value()
@@ -81,6 +87,18 @@ class Analyzer(object):
     @property
     def ROIy2(self):
         return self.main.ROIy2.value()
+
+    @property
+    def fit_type(self):
+        return self.main.FitTypeCombo.currentText()
+
+    @property
+    def image_type(self):
+        return self.main.imageTypeCombo.currentText()
+    
+    @property
+    def slice_width(self):
+        return self.main.sliceWidth.value()
 
     def set_images(self, images):
         print 'updating images'
@@ -172,7 +190,7 @@ class Analyzer(object):
 
         params = self.x_model.make_params()
         fits = self.x_model.fit(self.xvals, x=self.xvals_haxis, params=params)
-        self.atom_stats.x_fits = fits.best_values
+        self.atom_params.x_fits = fits.best_values
         self.main.fitdisplay.setPlainText(fits.fit_report())
         self.update_xfit_display()
 
@@ -191,38 +209,43 @@ class Analyzer(object):
 
         params = self.y_model.make_params()
         fits = self.y_model.fit(self.yvals, x=self.yvals_haxis, params=params)
-        self.atom_stats.y_fits = fits.best_values
+        self.atom_params.y_fits = fits.best_values
         self.main.fitdisplay.setPlainText(fits.fit_report())
         self.update_yfit_display()
 
     def update_xfit_display(self):
-       self.main.Hfit_A.setText('{:.3f}'.format(self.atom_stats.x_fits.get('A')))
-       self.main.Hfit_x0.setText('{:.3f}'.format(self.atom_stats.x_fits.get('x0')))
-       self.main.Hfit_sigx.setText('{:.3f}'.format(self.atom_stats.x_fits.get('sigma')))
-       self.main.Hfit_z0.setText('{:.3f}'.format(self.atom_stats.x_fits.get('y0')))
+       self.main.Hfit_A.setText('{:.3f}'.format(self.atom_params.x_fits.get('A')))
+       self.main.Hfit_x0.setText('{:.3f}'.format(self.atom_params.x_fits.get('x0')))
+       self.main.Hfit_sigx.setText('{:.3f}'.format(self.atom_params.x_fits.get('sigma')))
+       self.main.Hfit_z0.setText('{:.3f}'.format(self.atom_params.x_fits.get('y0')))
 
     def update_yfit_display(self):
-       self.main.Vfit_A.setText('{:.3f}'.format(self.atom_stats.y_fits.get('A')))
-       self.main.Vfit_y0.setText('{:.3f}'.format(self.atom_stats.y_fits.get('x0')))
-       self.main.Vfit_sigy.setText('{:.3f}'.format(self.atom_stats.y_fits.get('sigma')))
-       self.main.Vfit_z0.setText('{:.3f}'.format(self.atom_stats.y_fits.get('y0')))
+       self.main.Vfit_A.setText('{:.3f}'.format(self.atom_params.y_fits.get('A')))
+       self.main.Vfit_y0.setText('{:.3f}'.format(self.atom_params.y_fits.get('x0')))
+       self.main.Vfit_sigy.setText('{:.3f}'.format(self.atom_params.y_fits.get('sigma')))
+       self.main.Vfit_z0.setText('{:.3f}'.format(self.atom_params.y_fits.get('y0')))
 
     def calcAtoms(self):
-        self.main.AtomNumSumLE.setText('{:.3e}'.format(self.atom_stats.number_sum))
-        self.main.AtomNumFitLE.setText('{:.3e}'.format(self.atom_stats.number_fit))
-        self.main.TxLE.setText('{:.3f}'.format(self.atom_stats.temp_x))
-        self.main.TyLE.setText('{:.3f}'.format(self.atom_stats.temp_y))
-        self.main.TLE.setText('{:.3f}'.format(self.atom_stats.temp))
-        self.main.xwidthumLE.setText('{:.3f}'.format(self.atom_stats.width_x_um))
-        self.main.ywidthumLE.setText('{:.3f}'.format(self.atom_stats.width_y_um))
+        self.main.AtomNumSumLE.setText('{:.3e}'.format(self.atom_params.number_sum))
+        self.main.AtomNumFitLE.setText('{:.3e}'.format(self.atom_params.number_fit))
+        self.main.TxLE.setText('{:.3f}'.format(self.atom_params.temp_x))
+        self.main.TyLE.setText('{:.3f}'.format(self.atom_params.temp_y))
+        self.main.TLE.setText('{:.3f}'.format(self.atom_params.temp))
+        self.main.xwidthumLE.setText('{:.3f}'.format(self.atom_params.width_x_um))
+        self.main.ywidthumLE.setText('{:.3f}'.format(self.atom_params.width_y_um))
 
 
-class AtomStats(object):
+class AtomParameters(object):
     def __init__(self, main, analyzer):
         self.main = main
         self.analyzer = analyzer
         self.x_fits = {}
         self.y_fits = {}
+        
+        self.main.pixSize.setValue(7.4)
+        self.main.detuning.setValue(0)
+        self.main.TOF.setValue(5)
+        self.main.lamda.setValue(780.24)
 
     @property
     def wavelength(self):
@@ -231,6 +254,14 @@ class AtomStats(object):
     @property
     def detune(self):
         return self.main.detuning.value() * 1.e6
+
+    @property
+    def pixel_size(self):
+        return self.main.pixSize.value()
+
+    @property
+    def tof(self):
+        return self.main.TOF.value()
 
     @property
     def scatt_0(self):
@@ -242,11 +273,11 @@ class AtomStats(object):
 
     @property
     def width_x_um(self):
-        return self.main.pixSize.value() * self.x_fits.get('sigma')
+        return self.pixel_size * self.x_fits.get('sigma')
 
     @property
     def width_y_um(self):
-        return self.main.pixSize.value() * self.y_fits.get('sigma')
+        return self.pixel_size * self.y_fits.get('sigma')
 
     @property
     def od_max(self):
@@ -254,15 +285,15 @@ class AtomStats(object):
 
     @property
     def temp_x(self):
-        return self.width_x_um * self.width_x_um * rb_mass / kB / (self.main.TOF.value() ** 2)
+        return self.width_x_um * self.width_x_um * rb_mass / kB / (self.tof ** 2)
 
     @property
     def temp_y(self):
-        return self.width_y_um * self.width_y_um * rb_mass / kB / (self.main.TOF.value() ** 2)
+        return self.width_y_um * self.width_y_um * rb_mass / kB / (self.tof ** 2)
 
     @property
     def temp(self):
-        return self.width_x_um * self.width_y_um * rb_mass / kB / (self.main.TOF.value() ** 2)
+        return self.width_x_um * self.width_y_um * rb_mass / kB / (self.tof ** 2)
 
     @property
     def number_fit(self):
@@ -274,4 +305,4 @@ class AtomStats(object):
         if self.main.subBkgd.isChecked():
             atom_sum -= self.bkgdAvg * self.analyzer.sliced_atoms.size
 
-        return (self.main.pixSize.value() * 1.e-6) ** 2 / self.scatt * (atom_sum)
+        return (self.pixel_size * 1.e-6) ** 2 / self.scatt * (atom_sum)

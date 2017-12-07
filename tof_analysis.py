@@ -5,30 +5,33 @@ Created on Tue Jan 19 10:09:26 2016
 @author: Lindsay
 """
 from PyQt5.uic import loadUiType
-from matplotlib.backends.backend_qt5agg import (
-    FigureCanvasQTAgg as FigureCanvas,
-    NavigationToolbar2QT as NavigationToolbar)
-
 from PyQt5 import QtCore
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 
+from matplotlib.backends.backend_qt5agg import (
+    FigureCanvasQTAgg as FigureCanvas,
+    NavigationToolbar2QT as NavigationToolbar)
+
 import matplotlib.pyplot as plt    
 import matplotlib.gridspec as gridspec
+from matplotlib.widgets import Cursor
+
 import sys
 import os
 import numpy as np
-from matplotlib.widgets import Cursor
 from datetime import date
+
 # import mv
 import mock_mv as mv
+
 import bmp_loader
 import capture_threads
 import atom_analyzer
 
 ROOT_PATH = os.getcwd()
 
-Ui_MainWindow, QMainWindow = loadUiType(os.path.join(ROOT_PATH, 'TOFanalysis.ui'))
+Ui_MainWindow, QMainWindow = loadUiType(os.path.join(ROOT_PATH, 'tof_analysis.ui'))
 Ui_CamSelect, QCamSelect = loadUiType(os.path.join(ROOT_PATH, 'cam_selector.ui'))
 
 def funcGaussian(x,A,x0,sigma,y0):
@@ -66,6 +69,7 @@ class Main(QMainWindow, Ui_MainWindow):
         self.dev = device
 
         self.running = RunLock(False)
+        self.updating = RunLock(False)
         self.snapshot_thread = capture_threads.AbsorptionCapture(self.dev, self.running)
         self.continuous_capture_thread = capture_threads.ContinuousCapture(self.dev, self.running, min_delay=0)
         self.delayed_capture_thread = capture_threads.DelayedCapture(self.dev, self.running, min_delay=0)
@@ -111,12 +115,10 @@ class Main(QMainWindow, Ui_MainWindow):
         # add facility to draw ROI
         self.a1.callbacks.connect('xlim_changed', self.xchange) 
         self.a1.callbacks.connect('ylim_changed', self.ychange) 
-        #self.canvas1.mpl_connect('button_press_event', self.xyzvals)
-        #self.cursor1 = Cursor(self.a1,useblit=True,color='k')
+        self.canvas1.mpl_connect('button_press_event', self.xyzvals)
+        self.cursor1 = Cursor(self.a1, useblit=True, color='k')
         self.xcoordLE.setText('{:.3f}'.format(0))
         self.ycoordLE.setText('{:.3f}'.format(0))
-
-
 
         # Raw images
         self.fig4 = plt.Figure()
@@ -181,9 +183,6 @@ class Main(QMainWindow, Ui_MainWindow):
         self.bkgdValue.setMaximum(100000)
          
         # setup combo box
-        self.FitTypeCombo.addItems(['Gaussian (full)', 'Gaussian (ROI)', 'Gaussian (ROI->slice)'])
-        self.atomCombo.addItems(['87 Rb', '39 K', '40 K'])
-        self.imageTypeCombo.addItems(['Absorption', 'Fluorescence'])
         self.whichImageCombo.addItems(['Image 1', 'Image 2', 'Image 3', 'Processed'])
         self.whichImageCombo.activated.connect(self.update_rawimage)
         self.cmapCombo.addItems(['coolwarm', 'gray', 'spectral', 'coolwarm_r', 'gray_r', 'spectral_r'])
@@ -207,13 +206,6 @@ class Main(QMainWindow, Ui_MainWindow):
                     self.preset_combobox.addItems(line[1].rsplit())
         
         # setup spin boxes
-        self.sliceWidth.setMinimum(2)
-        self.sliceWidth.setMaximum(500)
-        self.sliceWidth.setValue(20)
-        self.pixSize.setValue(7.4)
-        self.detuning.setValue(0)
-        self.TOF.setValue(5)
-        self.lamda.setValue(780.24)
         self.RawSpinMin.setValue(0)
         self.RawSpinMax.setValue(100)
         self.CLimSpinMin.setValue(0)
@@ -236,8 +228,6 @@ class Main(QMainWindow, Ui_MainWindow):
         self.ROIy2.valueChanged.connect(self.update_ROI)
         self.user_width.setMaximum(self.dev.Setting.Base.Camera.GenICam.ImageFormatControl.WidthMax.value)
         self.user_height.setMaximum(self.dev.Setting.Base.Camera.GenICam.ImageFormatControl.HeightMax.value)
-        # initial ROI values
-        self.defaultROI()
                    
         # Set for testing
         # self.OutputFile.setText('Z:/Data/ImageData/bmp_test/AllData.txt')
@@ -248,12 +238,14 @@ class Main(QMainWindow, Ui_MainWindow):
         self.NumDataFolder.setText(os.path.join(ROOT_PATH, 'ImageData'))
 
         # set original data arrays to zero
-        self.atoms = []
-        self.img1 = []
-        self.img2 = []
-        self.img3 = []
+        self.atoms = np.random.rand(5,5)
+        self.img1 = np.random.rand(5,5)
+        self.img2 = np.random.rand(5,5)
+        self.img3 = np.random.rand(5,5)
         #
 
+        # initial ROI values
+        self.defaultROI()
         self.update_param_disp()
         self.update_trigger_disp()
     
@@ -308,8 +300,6 @@ class Main(QMainWindow, Ui_MainWindow):
 
     def set_cam_params(self):
         #this will apply the imaging settings in the "set to" column to the camera
-
-        
         try:
             GenICam_handle = self.dev.Setting.Base.Camera.GenICam
             
@@ -385,11 +375,8 @@ class Main(QMainWindow, Ui_MainWindow):
                         params.append(line[1].rstrip())
                     continue
 
-                if line[1].rstrip() != preset_name:
-                    continue
-                else:
+                if line[1].rstrip() == preset_name:
                     found_name = True
-            f.close()
             return params
         
     def view_preset_params(self):
@@ -491,7 +478,6 @@ class Main(QMainWindow, Ui_MainWindow):
         self.snapshot_thread.start()
 
     def set_images(self, images):
-        print 'updating images'
         self.img1 = np.array(images[0])
         self.img2 = np.array(images[1])
         self.img3 = np.array(images[2])
@@ -507,7 +493,9 @@ class Main(QMainWindow, Ui_MainWindow):
         self.snapshot_thread.start()
 
     def xyzvals(self,event):
-     # function to call if the autoupdate is on, and the polling timeout is reached
+        # function to call if the autoupdate is on, and the polling timeout is reached
+        if event.inaxes is None:
+            return
         self.xcursor=int(event.xdata)
         self.ycursor=int(event.ydata)
         self.xcoordLE.setText('{:.3f}'.format(self.xcursor))
@@ -596,8 +584,8 @@ class Main(QMainWindow, Ui_MainWindow):
         self.fig1.colorbar(cmesh,cax=self.cax1)
         
         # add facility to draw ROI after axis cleared
-        self.a1.callbacks.connect('xlim_changed', self.xchange) 
-        self.a1.callbacks.connect('ylim_changed', self.ychange) 
+        self.a1.callbacks.connect('xlim_changed', self.xchange)
+        self.a1.callbacks.connect('ylim_changed', self.ychange)
         
         self.canvas1.draw()
     
@@ -691,49 +679,50 @@ class Main(QMainWindow, Ui_MainWindow):
         self.NumDataFolder.setText(self.NumDataFolderName)
 
     def xchange(self,ax):
-    # adjust ROI when using toolbar in image 1
-       if self.ROIDirect.isChecked(): return # don't reset numbers in "direct entry" case
-       self.ROIx1.setValue(self.a1.get_xlim()[0])
-       self.ROIx2.setValue(self.a1.get_xlim()[1])
-       
-       # update 1D figures
-       self.a2.set_xlim([self.ROIx1.value(),self.ROIx2.value()])
-       self.canvas1.draw()
+        # adjust ROI when using toolbar in image 1
+        self.update_ROI(x1 = self.a1.get_xlim()[0], x2 = self.a1.get_xlim()[1], draw = False)
 
     def ychange(self,ax):
-       # adjust ROI when using toolbar in image 1
-        if self.ROIDirect.isChecked(): return # don't reset numbers in "direct entry" case
-        self.ROIy1.setValue(self.a1.get_ylim()[0])
-        self.ROIy2.setValue(self.a1.get_ylim()[1])
-        
-        # update 1D figures
-        self.a3.set_xlim([self.ROIy1.value(),self.ROIy2.value()])
-        self.canvas1.draw()    
+        # adjust ROI when using toolbar in image 1
+        self.update_ROI(y1 = self.a1.get_ylim()[0], y2 = self.a1.get_ylim()[1], draw = False)
 
-    def update_ROI(self,):
-    # adjust ROI when box values are changed
-        # check that the "1" values are smaller than the "2" values
-        if self.ROICanvas.isChecked():
-            return # don't reset numbers in "direct entry" case
+    def clip(self, y1, y2, min = 0, max = 100):
+        y1, y2 = sorted([y1,y2])
+        if y1 < min:
+            y2 -= y1
+            y1 = 0
+        if y2 > max:
+            y1 -= y2 - max
+            y2 = max
+        y1 = np.clip(y1, 0, y2 - 1)
+        return y1, y2
 
-        if (self.ROIx1.value() > self.ROIx2.value()):
-            temp = self.ROIx1.value()
-            self.ROIx1.setValue(self.ROIx2.value())
-            self.ROIx2.setValue(temp)
+    def update_ROI(self, event = None, x1 = None, x2 = None, y1 = None, y2 = None, draw = True):
+        if self.updating.state:
+            return
+        with self.updating:
+            x1 = x1 or self.ROIx1.value()
+            x2 = x2 or self.ROIx2.value()
+            y1 = y1 or self.ROIy1.value()
+            y2 = y2 or self.ROIy2.value()
 
-        if (self.ROIy1.value() > self.ROIy2.value()):
-            temp = self.ROIy1.value()
-            self.ROIy1.setValue(self.ROIy2.value())
-            self.ROIy2.setValue(temp)
+            x1, x2 = self.clip(x1, x2, max=self.atoms.shape[1])
+            y1, y2 = self.clip(y1, y2, max=self.atoms.shape[0])
 
-        # update main figure
-        self.a1.set_xlim([self.ROIx1.value(),self.ROIx2.value()])
-        self.a1.set_ylim([self.ROIy1.value(),self.ROIy2.value()])
+            self.ROIx1.setValue(x1)
+            self.ROIx2.setValue(x2)
+            self.ROIy1.setValue(y1)
+            self.ROIy2.setValue(y2)
 
-        # update 1D figures
-        self.a2.set_xlim([self.ROIx1.value(),self.ROIx2.value()])
-        self.a3.set_xlim([self.ROIy1.value(),self.ROIy2.value()])
-        self.canvas1.draw()
+            # update main figure
+            self.a1.set_xlim([x1, x2], emit = False)
+            self.a1.set_ylim([y1, y2], emit = False)
+
+            # update 1D figures
+            self.a2.set_xlim([x1, x2])
+            self.a3.set_xlim([y1, y2])
+            if draw:
+                self.canvas1.draw()
 
     def defaultROI(self):
     # initial ROI values
