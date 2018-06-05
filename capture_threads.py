@@ -11,7 +11,7 @@ class Capture(QtCore.QThread):
 
     def run(self):
         if self.lock.state:
-            print RuntimeError('Tried to capture while another thread is active')
+            print(RuntimeError('Tried to capture while another thread is active'))
             return
         with self.lock:
             self.capture()
@@ -32,11 +32,11 @@ class TriggeredCapture(Capture):
         try:
             result = self.dev.get_image(timeout=(float(timeout_value) / 1000.))
         except Exception as e:
-            print "Did not recieve a trigger after " + str(timeout_value) + " milliseconds"
+            print("Did not recieve a trigger after " + str(timeout_value) + " milliseconds")
             self.dev.image_request_reset(0)
             return None
         else:
-            print 'captured'
+            print('captured')
             img = result.get_buffer()
             del result
             return img
@@ -51,7 +51,7 @@ class AbsorptionCapture(TriggeredCapture):
         for i in range(3):
             image = self.triggered_snapshot(self.dev.Setting.Base.Camera.ImageRequestTimeout_ms.value)
             if image is None:
-                print 'failed to acquire an image'
+                print('failed to acquire an image')
                 return
             imgs.append(image)
         imgs[1] = ((imgs[1] - 255)* 0.1)+255

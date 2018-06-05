@@ -101,7 +101,7 @@ class Analyzer(object):
         return self.main.sliceWidth.value()
 
     def set_images(self, images):
-        print 'updating images'
+        print('updating images')
         self.img1 = np.array(images[0])
         self.img2 = np.array(images[1])
         self.img3 = np.array(images[2])

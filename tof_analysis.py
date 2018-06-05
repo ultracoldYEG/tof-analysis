@@ -339,7 +339,7 @@ class Main(QMainWindow, Ui_MainWindow):
             GenICam_handle.ImageFormatControl.OffsetY = self.user_vert_offset.value()*(max_height-self.user_height.value())/100.
             
         except Exception as e:
-            print e
+            print(e)
 
         self.update_param_disp()
             
@@ -354,7 +354,7 @@ class Main(QMainWindow, Ui_MainWindow):
             self.dev.Setting.Base.Camera.ImageRequestTimeout_ms.value = float(self.user_trigger_timeout.value())
             
         except Exception as e:
-            print e
+            print(e)
             
         self.update_trigger_disp()
         
@@ -449,7 +449,7 @@ class Main(QMainWindow, Ui_MainWindow):
     def increase_capture_scroll(self):
         #used to scroll left or right if multiple images are collected by a multishot
         if self.running.state:
-            print 'Cannot scroll while capturing'
+            print('Cannot scroll while capturing')
             return
         current_index, current_capture_num = [int(x) for x in self.capture_num_info.text().split('/')]
         self.redraw_cam_plot(self.captures[current_index % current_capture_num])
@@ -458,7 +458,7 @@ class Main(QMainWindow, Ui_MainWindow):
     def decrease_capture_scroll(self):
         #used to scroll left or right if multiple images are collected by a multishot capture
         if self.running.state:
-            print 'Cannot scroll while capturing'
+            print('Cannot scroll while capturing')
             return
         current_index, current_capture_num = [int(x) for x in self.capture_num_info.text().split('/')]
         self.redraw_cam_plot(self.captures[(current_index-2) % current_capture_num])
@@ -467,7 +467,7 @@ class Main(QMainWindow, Ui_MainWindow):
     def update_continuous_capture(self):
         if self.continuous_capture_cb.isChecked():
             if self.running.state:
-                print 'Cannot capture image while another capture thread is running'
+                print('Cannot capture image while another capture thread is running')
                 self.continuous_capture_cb.setCheckState(False)
                 return
             self.continuous_capture_thread.start()
