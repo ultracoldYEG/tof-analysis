@@ -22,8 +22,8 @@ import os
 import numpy as np
 from datetime import date
 
-# import mv
-import mock_mv as mv
+import mv
+#import mock_mv as mv
 
 import bmp_loader
 import capture_threads
@@ -45,9 +45,9 @@ class CamWindow(QCamSelect, Ui_CamSelect):
         self.setupUi(self)
         self.device_id = None
         self.devices = {
+            'Andrei': '15384643',
             'Top Cam': '14234117',
             'Side Cam': '14366837',
-            'Andrei': '15384643',
         }
 
         self.cameraCombo.addItems(self.devices.keys())
@@ -238,16 +238,20 @@ class Main(QMainWindow, Ui_MainWindow):
         self.NumDataFolder.setText(os.path.join(ROOT_PATH, 'ImageData'))
 
         # set original data arrays to zero
-        self.atoms = np.random.rand(5,5)
-        self.img1 = np.random.rand(5,5)
-        self.img2 = np.random.rand(5,5)
-        self.img3 = np.random.rand(5,5)
+        r = self.dev.Setting.Base.Camera.GenICam.ImageFormatControl.WidthMax.value
+        c = self.dev.Setting.Base.Camera.GenICam.ImageFormatControl.HeightMax.value
+        print "Bounds: ", r, c
+        self.atoms = np.random.rand(r, c)
+        self.img1 = np.random.rand(r, c)
+        self.img2 = np.random.rand(r, c)
+        self.img3 = np.random.rand(r, c)
         #
 
         # initial ROI values
-        self.defaultROI()
+
         self.update_param_disp()
         self.update_trigger_disp()
+        self.defaultROI()
     
     def update_param_disp(self):
         #this will update the "value" column of the image settings panel directly from the camera's control board
@@ -280,7 +284,7 @@ class Main(QMainWindow, Ui_MainWindow):
         
         self.a6.cla()
         self.a6.axis("off")
-        self.a6.set_axis_bgcolor((1,1,1))
+        self.a6.set_facecolor((1,1,1))
         self.a6.plot([0,1,1,0,0],[1,1,0,0,1],color='black',lw=3)
         self.a6.plot([left_bound,right_bound,right_bound,left_bound,left_bound],
                      [upper_bound,upper_bound,lower_bound,lower_bound,upper_bound],color='red',lw=1)
@@ -576,6 +580,8 @@ class Main(QMainWindow, Ui_MainWindow):
             )
         self.a1.set_xlim([self.ROIx1.value(),self.ROIx2.value()])
         self.a1.set_ylim([self.ROIy1.value(),self.ROIy2.value()])
+        #self.a1.set_xlim([self.analyzer.xvals_haxis[0],self.analyzer.xvals_haxis[-1]])
+        #self.a1.set_ylim([self.analyzer.yvals_haxis[0],self.analyzer.yvals_haxis[-1]])
 
         self.lx = self.a1.axhline(y =  self.ycursor, color = 'black') # the horiz line
         self.ly = self.a1.axvline(x =  self.xcursor, color = 'black')  # the horiz line
@@ -617,31 +623,34 @@ class Main(QMainWindow, Ui_MainWindow):
         # a routine to update the figure with new data
         # get plot settings before update
  
-        self.a2.hold(True) 
+        #self.a2.hold(True) 
         self.a2.plot(self.analyzer.xvals_haxis,self.analyzer.xvals,'-',lw=1,color='deepskyblue')
         self.a2.set_xlim([self.ROIx1.value(),self.ROIx2.value()])
+        #self.a2.set_xlim([self.analyzer.xvals_haxis[0],self.analyzer.xvals_haxis[-1]])
+        
              
         fitx = np.linspace(self.analyzer.xvals_haxis[0],self.analyzer.xvals_haxis[-1])
         fity = funcGaussian(fitx,float(self.Hfit_A.text()),float(self.Hfit_x0.text()),float(self.Hfit_sigx.text()),float(self.Hfit_z0.text()))
         self.lxslice = self.a2.axvline(x =  self.xcursor,color = 'black') # the horiz line
            
         self.a2.plot(fitx,fity,'k--',lw=1)  
-        self.a2.hold(False)        
+        #self.a2.hold(False)        
 
     def update_yplot(self):
         # a routine to update the figure with new data
         # get plot settings before update
          
-        self.a3.hold(True)        
+        #self.a3.hold(True)        
         self.a3.plot(self.analyzer.yvals_haxis,self.analyzer.yvals,'g-',lw=1)
         self.a3.set_xlim([self.ROIy1.value(),self.ROIy2.value()])
+        #self.a3.set_xlim([self.analyzer.yvals_haxis[0],self.analyzer.yvals_haxis[-1]])
                  
         fitx = np.linspace(self.analyzer.yvals_haxis[0],self.analyzer.yvals_haxis[-1])
         fity = funcGaussian(fitx,float(self.Vfit_A.text()),float(self.Vfit_y0.text()),float(self.Vfit_sigy.text()),float(self.Vfit_z0.text()))
         self.lyslice = self.a3.axvline(x =  self.ycursor,color = 'black') # the horiz line
            
         self.a3.plot(fitx,fity,'k--',lw=1)
-        self.a3.hold(False)
+        #self.a3.hold(False)
 
     def process_data(self):
         self.update_atoms()
@@ -730,7 +739,7 @@ class Main(QMainWindow, Ui_MainWindow):
         
         right_bound = int(GenICam_handle.ImageFormatControl.Width.value)
         upper_bound = int(GenICam_handle.ImageFormatControl.Height.value)
-
+        print "Bounds: ", right_bound, upper_bound
         self.ROIx1.setValue(0)
         self.ROIx2.setValue(right_bound)
         self.ROIy1.setValue(0)

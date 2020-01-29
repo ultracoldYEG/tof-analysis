@@ -31,6 +31,7 @@ class TriggerMode(setting):
 class ExposureAuto(setting):
     pass
 class ExposureTime(setting):
+    value = 0
     pass
 class TriggerSource(setting):
     pass

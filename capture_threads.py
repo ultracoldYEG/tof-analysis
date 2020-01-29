@@ -54,8 +54,8 @@ class AbsorptionCapture(TriggeredCapture):
                 print 'failed to acquire an image'
                 return
             imgs.append(image)
-        imgs[1] = ((imgs[1] - 255)* 0.1)+255
-        imgs[2] = imgs[2] * 0.001
+        #imgs[1] = ((imgs[1] - 255)* 0.1)+255
+        #imgs[2] = imgs[2] * 0.001
         self.finished.emit(imgs)
 
 
