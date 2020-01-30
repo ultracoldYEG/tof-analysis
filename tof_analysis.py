@@ -248,6 +248,7 @@ class Main(QMainWindow, Ui_MainWindow):
         #self.defaultROI()
         self.update_param_disp()
         self.update_trigger_disp()
+        self.tabWidget.setCurrentIndex(0)
 
     
     def update_param_disp(self):
