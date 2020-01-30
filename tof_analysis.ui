@@ -42,7 +42,7 @@
        <enum>QTabWidget::Rounded</enum>
       </property>
       <property name="currentIndex">
-       <number>0</number>
+       <number>1</number>
       </property>
       <widget class="QWidget" name="AcquireImageTab">
        <attribute name="title">
@@ -717,8 +717,6 @@
                 </layout>
                </item>
               </layout>
-              <zorder>verticalLayoutWidget</zorder>
-              <zorder>horizontalLayoutWidget</zorder>
              </widget>
             </item>
             <item>
@@ -1141,8 +1139,6 @@ Activation</string>
                     </layout>
                    </item>
                   </layout>
-                  <zorder>verticalLayoutWidget_3</zorder>
-                  <zorder>horizontalLayoutWidget</zorder>
                  </widget>
                 </item>
                </layout>
@@ -2354,6 +2350,12 @@ Activation</string>
                </item>
                <item row="1" column="1">
                 <widget class="QLabel" name="AtomNumSumLE">
+                 <property name="frameShape">
+                  <enum>QFrame::WinPanel</enum>
+                 </property>
+                 <property name="frameShadow">
+                  <enum>QFrame::Sunken</enum>
+                 </property>
                  <property name="text">
                   <string/>
                  </property>
@@ -2364,6 +2366,12 @@ Activation</string>
                </item>
                <item row="2" column="1">
                 <widget class="QLabel" name="AtomNumFitLE">
+                 <property name="frameShape">
+                  <enum>QFrame::WinPanel</enum>
+                 </property>
+                 <property name="frameShadow">
+                  <enum>QFrame::Sunken</enum>
+                 </property>
                  <property name="text">
                   <string/>
                  </property>
@@ -2374,6 +2382,12 @@ Activation</string>
                </item>
                <item row="3" column="1">
                 <widget class="QLabel" name="TxLE">
+                 <property name="frameShape">
+                  <enum>QFrame::WinPanel</enum>
+                 </property>
+                 <property name="frameShadow">
+                  <enum>QFrame::Sunken</enum>
+                 </property>
                  <property name="text">
                   <string/>
                  </property>
@@ -2384,6 +2398,12 @@ Activation</string>
                </item>
                <item row="4" column="1">
                 <widget class="QLabel" name="TyLE">
+                 <property name="frameShape">
+                  <enum>QFrame::WinPanel</enum>
+                 </property>
+                 <property name="frameShadow">
+                  <enum>QFrame::Sunken</enum>
+                 </property>
                  <property name="text">
                   <string/>
                  </property>
@@ -2400,6 +2420,12 @@ Activation</string>
                    <height>0</height>
                   </size>
                  </property>
+                 <property name="frameShape">
+                  <enum>QFrame::WinPanel</enum>
+                 </property>
+                 <property name="frameShadow">
+                  <enum>QFrame::Sunken</enum>
+                 </property>
                  <property name="text">
                   <string/>
                  </property>
@@ -2410,6 +2436,12 @@ Activation</string>
                </item>
                <item row="6" column="1">
                 <widget class="QLabel" name="xwidthumLE">
+                 <property name="frameShape">
+                  <enum>QFrame::WinPanel</enum>
+                 </property>
+                 <property name="frameShadow">
+                  <enum>QFrame::Sunken</enum>
+                 </property>
                  <property name="text">
                   <string/>
                  </property>
@@ -2420,6 +2452,12 @@ Activation</string>
                </item>
                <item row="7" column="1">
                 <widget class="QLabel" name="ywidthumLE">
+                 <property name="frameShape">
+                  <enum>QFrame::WinPanel</enum>
+                 </property>
+                 <property name="frameShadow">
+                  <enum>QFrame::Sunken</enum>
+                 </property>
                  <property name="text">
                   <string/>
                  </property>

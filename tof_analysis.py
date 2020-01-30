@@ -46,8 +46,8 @@ class CamWindow(QCamSelect, Ui_CamSelect):
         self.device_id = None
         self.devices = {
             'Andrei': '15384643',
-            'Top Cam': '14234117',
-            'Side Cam': '14366837',
+            #'Top Cam': '14234117',
+            #'Side Cam': '14366837',
         }
 
         self.cameraCombo.addItems(self.devices.keys())
@@ -175,6 +175,7 @@ class Main(QMainWindow, Ui_MainWindow):
         self.saveCurrentButton.clicked.connect(self.save_current_images)
         self.ROICanvas.setChecked(True)
         self.ROIDirect.setChecked(False)
+        self.RawCLimAuto.setChecked(True)
         self.AutoUpdateImage.setChecked(False)
         self.dataSaveCheck.setChecked(True)
         self.getBkgd.clicked.connect(self.update_bkgd)
@@ -204,7 +205,7 @@ class Main(QMainWindow, Ui_MainWindow):
                 line=line.split(',')
                 if line[0] == 'name':
                     self.preset_combobox.addItems(line[1].rsplit())
-        
+        self.preset_combobox.setCurrentIndex(3)
         # setup spin boxes
         self.RawSpinMin.setValue(0)
         self.RawSpinMax.setValue(100)
@@ -238,20 +239,16 @@ class Main(QMainWindow, Ui_MainWindow):
         self.NumDataFolder.setText(os.path.join(ROOT_PATH, 'ImageData'))
 
         # set original data arrays to zero
-        r = self.dev.Setting.Base.Camera.GenICam.ImageFormatControl.WidthMax.value
-        c = self.dev.Setting.Base.Camera.GenICam.ImageFormatControl.HeightMax.value
-        print "Bounds: ", r, c
-        self.atoms = np.random.rand(r, c)
-        self.img1 = np.random.rand(r, c)
-        self.img2 = np.random.rand(r, c)
-        self.img3 = np.random.rand(r, c)
-        #
+        self.atoms = np.random.rand(5, 5)
+        self.img1 = np.random.rand(5, 5)
+        self.img2 = np.random.rand(5, 5)
+        self.img3 = np.random.rand(5, 5)
 
         # initial ROI values
-
+        #self.defaultROI()
         self.update_param_disp()
         self.update_trigger_disp()
-        self.defaultROI()
+
     
     def update_param_disp(self):
         #this will update the "value" column of the image settings panel directly from the camera's control board
@@ -480,6 +477,12 @@ class Main(QMainWindow, Ui_MainWindow):
         
     def update_auto_update(self):
         self.snapshot_thread.start()
+        print "Shape: ", self.user_width.value(), self.user_height.value()
+        #r = self.dev.Setting.Base.Camera.GenICam.ImageFormatControl.WidthMax.value
+        #c = self.dev.Setting.Base.Camera.GenICam.ImageFormatControl.HeightMax.value
+        #print "Test: ", r, c
+        self.update_ROI(x1=0, x2=self.user_width.value(), y1=0, y2=self.user_height.value(), draw=False )
+
 
     def set_images(self, images):
         self.img1 = np.array(images[0])
@@ -490,8 +493,8 @@ class Main(QMainWindow, Ui_MainWindow):
 
         if self.AutoUpdateImage.isChecked():
             self.start_snapshot_thread()
-
         self.process_data()
+
 
     def start_snapshot_thread(self):
         self.snapshot_thread.start()
@@ -580,8 +583,6 @@ class Main(QMainWindow, Ui_MainWindow):
             )
         self.a1.set_xlim([self.ROIx1.value(),self.ROIx2.value()])
         self.a1.set_ylim([self.ROIy1.value(),self.ROIy2.value()])
-        #self.a1.set_xlim([self.analyzer.xvals_haxis[0],self.analyzer.xvals_haxis[-1]])
-        #self.a1.set_ylim([self.analyzer.yvals_haxis[0],self.analyzer.yvals_haxis[-1]])
 
         self.lx = self.a1.axhline(y =  self.ycursor, color = 'black') # the horiz line
         self.ly = self.a1.axvline(x =  self.xcursor, color = 'black')  # the horiz line
@@ -623,34 +624,28 @@ class Main(QMainWindow, Ui_MainWindow):
         # a routine to update the figure with new data
         # get plot settings before update
  
-        #self.a2.hold(True) 
         self.a2.plot(self.analyzer.xvals_haxis,self.analyzer.xvals,'-',lw=1,color='deepskyblue')
         self.a2.set_xlim([self.ROIx1.value(),self.ROIx2.value()])
-        #self.a2.set_xlim([self.analyzer.xvals_haxis[0],self.analyzer.xvals_haxis[-1]])
         
              
         fitx = np.linspace(self.analyzer.xvals_haxis[0],self.analyzer.xvals_haxis[-1])
         fity = funcGaussian(fitx,float(self.Hfit_A.text()),float(self.Hfit_x0.text()),float(self.Hfit_sigx.text()),float(self.Hfit_z0.text()))
         self.lxslice = self.a2.axvline(x =  self.xcursor,color = 'black') # the horiz line
            
-        self.a2.plot(fitx,fity,'k--',lw=1)  
-        #self.a2.hold(False)        
+        self.a2.plot(fitx,fity,'k--',lw=1)
 
     def update_yplot(self):
         # a routine to update the figure with new data
         # get plot settings before update
          
-        #self.a3.hold(True)        
         self.a3.plot(self.analyzer.yvals_haxis,self.analyzer.yvals,'g-',lw=1)
         self.a3.set_xlim([self.ROIy1.value(),self.ROIy2.value()])
-        #self.a3.set_xlim([self.analyzer.yvals_haxis[0],self.analyzer.yvals_haxis[-1]])
                  
         fitx = np.linspace(self.analyzer.yvals_haxis[0],self.analyzer.yvals_haxis[-1])
         fity = funcGaussian(fitx,float(self.Vfit_A.text()),float(self.Vfit_y0.text()),float(self.Vfit_sigy.text()),float(self.Vfit_z0.text()))
         self.lyslice = self.a3.axvline(x =  self.ycursor,color = 'black') # the horiz line
            
         self.a3.plot(fitx,fity,'k--',lw=1)
-        #self.a3.hold(False)
 
     def process_data(self):
         self.update_atoms()
@@ -710,22 +705,22 @@ class Main(QMainWindow, Ui_MainWindow):
         if self.updating.state:
             return
         with self.updating:
-            x1 = x1 or self.ROIx1.value()
-            x2 = x2 or self.ROIx2.value()
-            y1 = y1 or self.ROIy1.value()
-            y2 = y2 or self.ROIy2.value()
-
-            x1, x2 = self.clip(x1, x2, max=self.atoms.shape[1])
-            y1, y2 = self.clip(y1, y2, max=self.atoms.shape[0])
+            x1 = x1 if x1!=None else self.ROIx1.value()
+            x2 = x2 if x2!=None else self.ROIx2.value()
+            y1 = y1 if y1!=None else self.ROIy1.value()
+            y2 = y2 if y2!=None else self.ROIy2.value()
+            
+            x1, x2 = self.clip(x1, x2, max=self.user_width.value())
+            y1, y2 = self.clip(y1, y2, max=self.user_height.value())
 
             self.ROIx1.setValue(x1)
             self.ROIx2.setValue(x2)
             self.ROIy1.setValue(y1)
             self.ROIy2.setValue(y2)
-
+            
             # update main figure
-            self.a1.set_xlim([x1, x2], emit = False)
-            self.a1.set_ylim([y1, y2], emit = False)
+            self.a1.set_xlim([x1, x2], emit = True)
+            self.a1.set_ylim([y1, y2], emit = True)
 
             # update 1D figures
             self.a2.set_xlim([x1, x2])
@@ -739,7 +734,6 @@ class Main(QMainWindow, Ui_MainWindow):
         
         right_bound = int(GenICam_handle.ImageFormatControl.Width.value)
         upper_bound = int(GenICam_handle.ImageFormatControl.Height.value)
-        print "Bounds: ", right_bound, upper_bound
         self.ROIx1.setValue(0)
         self.ROIx2.setValue(right_bound)
         self.ROIy1.setValue(0)
