@@ -1,7 +1,7 @@
-#TOF-analysis
+# TOF-analysis
 This program is for the capture, processing, and analysis of TOF images of ultracold clouds in time-of-flight.
 
-##Installation
+## Installation
 Follow these steps to install and run software correctly:
 
 1. Install the [Anaconda distribution](https://www.anaconda.com/distribution/) on Windows for Python 2.7.
