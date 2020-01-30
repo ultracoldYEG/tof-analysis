@@ -6,7 +6,7 @@ For this package to run correctly
 
 1. Make sure that git is installed on the computer. If not, download and install it.
 
-1. Find a file directory location to clone (i.e. download) this repository. Right click in the Windows Explorer window for that directory and click on the `<Git Bash>` menu option. When the prompt window opens, enter the normal git config options. Clone the repository.
+1. Find a file directory location to clone (i.e. download) this repository. Right click in the Windows Explorer window for that directory and click on the `<Git Bash Here>` menu option. When the prompt window opens, enter the normal git config options. Clone the repository.
 
 1. Open the Anaconda Prompt and install the `<lmfit>` and `<pyqt5>` packages with the commands:
 	* conda install -c conda-forge lmfit  (From [Anaconda](https://anaconda.org/conda-forge/lmfit))
