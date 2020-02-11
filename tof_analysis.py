@@ -235,7 +235,7 @@ class Main(QMainWindow, Ui_MainWindow):
         # self.ControlFile.setText("Z:/PythonData")
         # self.NumDataFolder.setText('Z:/Data/ImageData/')
         self.OutputFile.setText(os.path.join(ROOT_PATH, 'AllData.txt'))
-        self.ControlFile.setText(os.path.join(ROOT_PATH, 'PythonData.txt'))
+        self.ControlFile.setText("Z:\Experiment\PythonData")
         self.NumDataFolder.setText(os.path.join(ROOT_PATH, 'ImageData'))
 
         # set original data arrays to zero

@@ -1,47 +1,62 @@
-FileNumber=10
+FileNumber=114
+Index=10
+IndexedWaves=z;
+IndexedValues=1.044000E+2;
 # Current Variables
 # 
-currentTop=1.2
-currentBottom=7.000000E+0
-currentNorth=1.000000E+0
-currentSouth=4
-setFreq=1.042500E+2
+=0.000000E+0
+=0.000000E+0
+=0.000000E+0
+=0.000000E+0
+=0.000000E+0
+=0.000000E+0
+rep_aom=3.000000E-1
+z=1.044000E+2
 # Master Staging List
 # Line	Marker	Option	Halt	0       4       8      12      16      20    AO	Delay		Points	0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 Comment
-00		Ramp	1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	1	0	0	0	0	0	currentNorth	currentSouth	currentTop	currentBottom	step 1
-01		Ramp	0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	1	0	0	0	0	0	currentNorth	currentSouth	currentTop	currentBottom	step 1
-02		Ramp	1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	1	0	0	0	0	0	currentNorth	currentSouth	currentTop	currentBottom	step 1
-03		Ramp	0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	0.5	0	0	0	0	0	currentNorth	currentSouth	currentTop	currentBottom	step2
-04		Ramp	0 1 2 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	0.5	0	0	0	0	0	currentNorth	currentSouth	currentTop	currentBottom	step2
-05		Ramp	0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	0.5	0	0	0	0	0	currentNorth	currentSouth	currentTop	currentBottom	step2
-06		Ra mp	0 1 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	0.5	0	0	0	0	0	currentNorth	currentSouth	currentTop	currentBottom	step2
+00		Ramp	0 1 1 1 0 0 0 0 0 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0	5	0	0	0	0	5.15	1	1	0.7	0	0	0	0	0	0	0	0	0	MOT
+01		Ramp	0 1 1 1 0 0 0 0 0 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0	5	0	0	0	0	5.15	1	1	0.7	0	0	0	0	0	0	0	0	0	MOT
+02		Ramp	0 1 1 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0	3e-3	0	0	0	0	0	1	1	0	0	0	0	0	0	0	0	0	0	TOF
+03		Ramp	0 1 1 1 0 1 0 0 0 0 0 1 0 0 1 0 0 0 0 0 0 0 0 0	500e-6	0	0	0	0	0	1	1	0.5	0.5	0	0	0	0	0	0	0	0	imaging1
+04		Ramp	0 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	100e-3	0	0	0	0	0	1	1	0	0	0	0	0	0	0	0	0	0	hold
+05		Ramp	0 1 1 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0	3e-3	0	0	0	0	0	1	1	0	0	0	0	0	0	0	0	0	0	shutter
+06		Ramp	0 1 1 1 0 1 0 0 0 0 0 1 0 0 1 0 0 0 0 0 0 0 0 0	500e-6	0	0	0	0	0	1	1	0.5	0.5	0	0	0	0	0	0	0	0	imaging2
+07		Ramp	0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	100e-3	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	hold
+08		Ramp	0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0	500e-6	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	imaging3
+09		Ramp	0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	0.1	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	hold
+10		Ramp	0 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	0.1	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	hold
 #
 # Evaporation
 
 
 
 # Line	Marker	Option	Halt	0       4       8      12      16      20    AO	Delay		PointsFreq0 Amp0 Phase0 Freq1 Amp1 Phase1		Freq2 Amp2 Phase2 Freq3 Amp3 Phase3 
-00		Ramp	1 0 0 0 0 0 0 2 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	1	0	0	-40	0	0	-40	0	0	-40	0	setFreq	0	0	step 1
-01		Ramp	1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	1	0	0	-40	0	0	-40	0	0	-40	0	1.032500E+2	0	0	step 1
-02		Ramp	1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	1	0	0	-40	0	0	-40	0	0	-40	0	1.032500E+2	0	0	step 1
-03		Ramp	0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	0.5	0	0	-40	0	0	-40	0	0	-40	0	1.032500E+2	0	0	step2
-04		Ramp	0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	0.5	0	0	-40	0	0	-40	0	0	-40	0	1.032500E+2	0	0	step2
-05		Ramp	0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	0.5	0	0	-40	0	0	-40	0	0	-40	0	1.032500E+2	0	0	step2
-06		Ramp	0 1 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	0.5	0	0	-40	0	0	-40	0	0	-40	0	1.032500E+2	0	0	step2
+00		Ramp	0 1 1 1 0 0 0 0 0 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0	5	0	0	0	0	104.2	0	0	0	0	0	0	0	0	MOT
+01		Ramp	0 1 1 1 0 0 0 0 0 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0	5	0	0	0	0	104.2	0	0	0	0	0	0	0	0	MOT
+02		Ramp	0 1 1 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0	3e-3	0	0	0	0	104.2	0	0	0	0	0	0	0	0	TOF
+03		Ramp	0 1 1 1 0 1 0 0 0 0 0 1 0 0 1 0 0 0 0 0 0 0 0 0	500e-6	0	0	0	0	104.2	0	0	0	0	0	0	0	0	imaging1
+04		Ramp	0 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	100e-3	0	0	0	0	104.2	0	0	0	0	0	0	0	0	hold
+05		Ramp	0 1 1 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0	3e-3	0	0	0	0	104.2	0	0	0	0	0	0	0	0	shutter
+06		Ramp	0 1 1 1 0 1 0 0 0 0 0 1 0 0 1 0 0 0 0 0 0 0 0 0	500e-6	0	0	0	0	104.2	0	0	0	0	0	0	0	0	imaging2
+07		Ramp	0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	100e-3	0	0	0	0	104.2	0	0	0	0	0	0	0	0	hold
+08		Ramp	0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0	500e-6	0	0	0	0	104.2	0	0	0	0	0	0	0	0	imaging3
+09		Ramp	0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	0.1	0	0	0	0	104.2	0	0	0	0	0	0	0	0	hold
+10		Ramp	0 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0	0.1	0	0	0	0	104.2	0	0	0	0	0	0	0	0	hold
+
 
 # Image Data
-Atom num (sum) = 3.848e+08
-Atom Num (fit) = 1.124e+05
-Temp-x (uK) = 327.833
-Temp-y (uK) = 333.157
-Temp (uK) = 330.484
-x-width (um) = 882.303
-y-width (um) = 889.439
-xfit_x0 = 940.868
-xfit_A = 0.003
-xfit_sigx = 119.230
-xfit_z0 = 1.644
-yfit_y0 = 750.721
-yfit_A = 0.016
-yfit_sigy = 120.194
-yfit_z0 = 1.640
+Atom num (sum) = 4.043e+08
+Atom Num (fit) = 1.161e+07
+Temp-x (uK) = 23058.340
+Temp-y (uK) = 961.191
+Temp (uK) = 4707.810
+x-width (um) = 7399.557
+y-width (um) = 1510.764
+xfit_x0 = 327.271
+xfit_A = 0.032
+xfit_sigx = 999.940
+xfit_z0 = 1.700
+yfit_y0 = 439.300
+yfit_A = 0.072
+yfit_sigy = 204.157
+yfit_z0 = 1.691
