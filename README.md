@@ -19,12 +19,12 @@ Wait for the files and dependencies to download. Close the prompt window.
 ](https://www.microsoft.com/en-ca/download/details.aspx?id=44266
 )
 
-1. Download and install from the Google Drive in `My Drive/Scott Wilson/Point Grey USB3 Cam Files` the [mvGenTL_Acquire install file](https://drive.google.com/open?id=15s1UWyee9QR4_iMUHH7fOnKHb7v47idX). After installing you will need to restart the computer. Select the default configurations. 
+1. Download and install from the Google Drive in `My Drive/Scott Wilson/Point Grey USB3 Cam Files` the [mvGenTL_Acquire install file](https://drive.google.com/open?id=15s1UWyee9QR4_iMUHH7fOnKHb7v47idX). After installing you will need to restart the computer. Select the default configurations. (NOTE: If you are running Windows 10, these drivers will likely cause problems)
 
 1. Now that we have the drivers for the cameras, we now need a wrapper that can work in Python. There is a github that does just that: [https://github.com/geggo/MVacquire](https://github.com/geggo/MVacquire). We also have a copy of that same repository in the [Google Drive](https://drive.google.com/file/d/0B2nT0ELbmtx4OFpsUHQwSlpKQWs/view?usp=sharing). 
-    1. The instructions provided on the github are all you really need. Once you have installed Microsoft Visual C++ Compiler for Python 2.7, you should be able to run a cmd terminal which is labelled ìVisual C++ 2008 XX-Bit Command Promptî. XX will be either 32 or 64 depending on the computer youíre running it on.
+    1. The instructions provided on the github are all you really need. Once you have installed Microsoft Visual C++ Compiler for Python 2.7, you should be able to run a cmd terminal which is labelled ‚ÄúVisual C++ 2008 XX-Bit Command Prompt‚Äù. XX will be either 32 or 64 depending on the computer you‚Äôre running it on.
     
-    1. In this command prompt youíll need to use ìcdî to navigate to where you unpacked the github files. 
+    1. In this command prompt you‚Äôll need to use ‚Äúcd‚Äù to navigate to where you unpacked the github files. 
     1. Once there, just run the following 4 commands:
         * `set MSSDK=1`
         * `set DISTUTILS_USE_SDK=1`
